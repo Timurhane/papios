@@ -16,11 +16,21 @@ import type {
   CompanyPatch,
   CompanyRow,
   EmbeddingTable,
+  EnrollmentRow,
+  InboxInput,
+  PlaybookWithSteps,
+  TouchRow,
+  TouchStatus,
   KnowledgeHit,
   NewCompany,
   Repo,
   UsageSummary,
 } from './types.ts';
+
+const TOUCH_COLUMNS =
+  'id, company_id, contact_id, enrollment_id, step_position, channel, recipient, subject, body, status, skip_reason, approval_id, due_at, sent_at, provider_message_id, thread_id, cold';
+const STEP_COLUMNS =
+  'position, day_offset, anchor, repeat_every_days, channel, angle, conditions, requires_approval, approval_exempt_kind';
 
 const COMPANY_COLUMNS =
   'id, name, name_norm, domain, phone_e164, website_url, instagram_handle, maps_url, emails, city, district, address, sector, source, verified, stage, score, score_rationale, next_step_kind, assigned_playbook, waiting_reason, waiting_until, last_analyzed_at';
@@ -773,5 +783,397 @@ export class SupabaseRepo implements Repo {
       .eq('heavy', heavy);
     if (res.error) throw new Error(`count jobs: ${res.error.message}`);
     return res.count ?? 0;
+  }
+
+  // --- Outreach ------------------------------------------------------------------------------
+
+  private async playbookWhere(
+    col: 'code' | 'id',
+    value: string,
+  ): Promise<PlaybookWithSteps | null> {
+    const row = must(
+      await this.db
+        .from('playbooks')
+        .select(`id, code, name, playbook_steps(${STEP_COLUMNS})`)
+        .eq('tenant_id', this.tenantId)
+        .eq(col, value)
+        .maybeSingle(),
+      'get playbook',
+    ) as {
+      id: string;
+      code: string;
+      name: string;
+      playbook_steps: PlaybookWithSteps['steps'];
+    } | null;
+    if (!row) return null;
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      steps: [...row.playbook_steps].sort((a, b) => a.position - b.position),
+    };
+  }
+
+  getPlaybook(code: string) {
+    return this.playbookWhere('code', code);
+  }
+
+  getPlaybookById(id: string) {
+    return this.playbookWhere('id', id);
+  }
+
+  async companiesToEnroll(limit: number) {
+    const rows = must(
+      await this.db
+        .from('companies')
+        .select(`${COMPANY_COLUMNS}, enrollments(id, status)`)
+        .eq('tenant_id', this.tenantId)
+        .eq('stage', 'analyzed')
+        .eq('next_step_kind', 'playbook')
+        .order('score', { ascending: false })
+        .limit(limit * 3),
+      'companies to enroll',
+    ) as unknown as (CompanyRow & { enrollments: { status: string }[] })[];
+    return rows.filter((r) => !r.enrollments.some((e) => e.status === 'active')).slice(0, limit);
+  }
+
+  async createEnrollment(companyId: string, playbookId: string, anchorDate: string | null) {
+    const row = must(
+      await this.db
+        .from('enrollments')
+        .insert({
+          tenant_id: this.tenantId,
+          company_id: companyId,
+          playbook_id: playbookId,
+          anchor_date: anchorDate,
+        })
+        .select('id')
+        .single(),
+      'create enrollment',
+    ) as { id: string };
+    return row.id;
+  }
+
+  async activeEnrollments(limit: number) {
+    return must(
+      await this.db
+        .from('enrollments')
+        .select('id, company_id, playbook_id, status, started_at, anchor_date, next_position')
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'active')
+        .order('updated_at')
+        .limit(limit),
+      'active enrollments',
+    ) as EnrollmentRow[];
+  }
+
+  async updateEnrollment(
+    id: string,
+    patch: Partial<Pick<EnrollmentRow, 'status' | 'next_position'>> & { stop_reason?: string },
+  ) {
+    must(
+      await this.db.from('enrollments').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update enrollment',
+    );
+  }
+
+  async stopEnrollments(companyId: string, reason: string) {
+    const rows = must(
+      await this.db
+        .from('enrollments')
+        .update({ status: 'stopped', stop_reason: reason })
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .select('id'),
+      'stop enrollments',
+    ) as { id: string }[];
+    // Pending drafts of stopped sequences must not go out either.
+    if (rows.length) {
+      must(
+        await this.db
+          .from('touches')
+          .update({ status: 'cancelled', skip_reason: reason })
+          .eq('tenant_id', this.tenantId)
+          .eq('company_id', companyId)
+          .in('status', ['drafted', 'awaiting_approval', 'approved', 'scheduled', 'ready']),
+        'cancel touches',
+      );
+    }
+    return rows.length;
+  }
+
+  async createTouch(t: Partial<TouchRow> & Pick<TouchRow, 'company_id' | 'channel' | 'status'>) {
+    const row = must(
+      await this.db
+        .from('touches')
+        .insert({ ...t, tenant_id: this.tenantId })
+        .select('id')
+        .single(),
+      'create touch',
+    ) as { id: string };
+    return row.id;
+  }
+
+  async updateTouch(id: string, patch: Partial<Omit<TouchRow, 'id'>>) {
+    must(
+      await this.db.from('touches').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update touch',
+    );
+  }
+
+  async getTouch(id: string) {
+    return must(
+      await this.db
+        .from('touches')
+        .select(TOUCH_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'get touch',
+    ) as TouchRow | null;
+  }
+
+  async touchForStep(enrollmentId: string, position: number) {
+    const rows = must(
+      await this.db
+        .from('touches')
+        .select(TOUCH_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('enrollment_id', enrollmentId)
+        .eq('step_position', position)
+        .order('created_at', { ascending: false })
+        .limit(1),
+      'touch for step',
+    ) as TouchRow[];
+    return rows[0] ?? null;
+  }
+
+  async touchByApproval(approvalId: string) {
+    return must(
+      await this.db
+        .from('touches')
+        .select(TOUCH_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('approval_id', approvalId)
+        .maybeSingle(),
+      'touch by approval',
+    ) as TouchRow | null;
+  }
+
+  async touchesByStatus(statuses: TouchStatus[], limit: number, dueBefore?: Date) {
+    let q = this.db
+      .from('touches')
+      .select(TOUCH_COLUMNS)
+      .eq('tenant_id', this.tenantId)
+      .in('status', statuses);
+    if (dueBefore) q = q.lte('due_at', dueBefore.toISOString());
+    return must(
+      await q.order('due_at', { ascending: true, nullsFirst: true }).limit(limit),
+      'touches by status',
+    ) as TouchRow[];
+  }
+
+  async findTouchForReply(threadId: string | null, from: string) {
+    if (threadId) {
+      const rows = must(
+        await this.db
+          .from('touches')
+          .select(TOUCH_COLUMNS)
+          .eq('tenant_id', this.tenantId)
+          .eq('thread_id', threadId)
+          .limit(1),
+        'touch by thread',
+      ) as TouchRow[];
+      if (rows[0]) return rows[0];
+    }
+    const rows = must(
+      await this.db
+        .from('touches')
+        .select(TOUCH_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'sent')
+        .ilike('recipient', from)
+        .order('sent_at', { ascending: false })
+        .limit(1),
+      'touch by sender',
+    ) as TouchRow[];
+    return rows[0] ?? null;
+  }
+
+  async emailsSentSince(since: Date) {
+    const res = await this.db
+      .from('touches')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', this.tenantId)
+      .eq('channel', 'email')
+      .eq('status', 'sent')
+      .gte('sent_at', since.toISOString());
+    if (res.error) throw new Error(`emails sent: ${res.error.message}`);
+    return res.count ?? 0;
+  }
+
+  private async sentEmailAt(ascending: boolean) {
+    const rows = must(
+      await this.db
+        .from('touches')
+        .select('sent_at')
+        .eq('tenant_id', this.tenantId)
+        .eq('channel', 'email')
+        .eq('status', 'sent')
+        .order('sent_at', { ascending })
+        .limit(1),
+      'sent email at',
+    ) as { sent_at: string }[];
+    return rows[0]?.sent_at ?? null;
+  }
+
+  firstEmailSentAt() {
+    return this.sentEmailAt(true);
+  }
+
+  lastEmailSentAt() {
+    return this.sentEmailAt(false);
+  }
+
+  async sentToRecipientLast7Days(recipient: string) {
+    return Number(
+      must(
+        await this.app().rpc('touches_last_week', {
+          p_tenant_id: this.tenantId,
+          p_recipient: recipient,
+        }),
+        'touches last week',
+      ),
+    );
+  }
+
+  async isSuppressed(kind: string, value: string) {
+    return Boolean(
+      must(
+        await this.app().rpc('is_suppressed', {
+          p_tenant_id: this.tenantId,
+          p_kind: kind,
+          p_value: value,
+        }),
+        'is suppressed',
+      ),
+    );
+  }
+
+  async suppress(
+    kind: string,
+    value: string,
+    reason: 'unsubscribe_link' | 'asked_not_to_contact' | 'manual' | 'data_deletion',
+    source: string,
+  ) {
+    must(
+      await this.app().rpc('suppress', {
+        p_tenant_id: this.tenantId,
+        p_kind: kind,
+        p_value: value,
+        p_reason: reason,
+        p_source: source,
+      }),
+      'suppress',
+    );
+  }
+
+  async addInboxMessage(m: InboxInput) {
+    const res = await this.db
+      .from('inbox_messages')
+      .insert({
+        tenant_id: this.tenantId,
+        company_id: m.companyId,
+        touch_id: m.touchId,
+        channel: m.channel,
+        provider_message_id: m.providerMessageId,
+        thread_id: m.threadId,
+        from_address: m.from,
+        subject: m.subject,
+        body: m.body.slice(0, 20_000),
+        received_at: m.receivedAt,
+        classification: m.classification,
+        classified_by: 'rule',
+      })
+      .select('id')
+      .single();
+    if (res.error?.code === '23505') return null; // already stored
+    return (must(res, 'add inbox message') as { id: string }).id;
+  }
+
+  async toneProfile() {
+    const row = must(
+      await this.db
+        .from('tone_profiles')
+        .select('description, dos, donts, examples')
+        .eq('tenant_id', this.tenantId)
+        .maybeSingle(),
+      'tone profile',
+    ) as { description: string; dos: string[]; donts: string[]; examples: string[] } | null;
+    return row ?? { description: '', dos: [], donts: [], examples: [] };
+  }
+
+  async bannedPhrases() {
+    const rows = must(
+      await this.db.from('banned_phrases').select('phrase').eq('tenant_id', this.tenantId),
+      'banned phrases',
+    ) as { phrase: string }[];
+    return rows.map((r) => r.phrase);
+  }
+
+  async recentStyleCorrections(draftKind: string, limit: number) {
+    return must(
+      await this.db
+        .from('style_memory')
+        .select('original, instruction, revised')
+        .eq('tenant_id', this.tenantId)
+        .eq('draft_kind', draftKind)
+        .neq('verdict', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      'style corrections',
+    ) as { original: string; instruction: string | null; revised: string | null }[];
+  }
+
+  async founderSlotsAvailable() {
+    const row = must(
+      await this.db
+        .from('founder_discount')
+        .select('total_slots, used_slots')
+        .eq('tenant_id', this.tenantId)
+        .maybeSingle(),
+      'founder slots',
+    ) as { total_slots: number; used_slots: number } | null;
+    return Boolean(row && row.used_slots < row.total_slots);
+  }
+
+  async latestAnalysis(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('analyses')
+        .select('findings, strongest_finding')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .neq('status', 'failed')
+        .order('created_at', { ascending: false })
+        .limit(1),
+      'latest analysis',
+    ) as { findings: string[]; strongest_finding: string | null }[];
+    return rows[0] ?? null;
+  }
+
+  async primaryContact(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('contacts')
+        .select('id, full_name')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .order('is_decision_maker', { ascending: false })
+        .limit(1),
+      'primary contact',
+    ) as { id: string; full_name: string | null }[];
+    return rows[0] ?? null;
   }
 }

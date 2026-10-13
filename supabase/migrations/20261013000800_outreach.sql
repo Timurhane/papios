@@ -42,6 +42,8 @@ create table public.touches (
   sent_at timestamptz,
   provider_message_id text,
   thread_id text,
+  -- first email of a cold sequence: the 80-word rule applies (K-10.15)
+  cold boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   foreign key (company_id, tenant_id) references public.companies (id, tenant_id) on delete cascade,

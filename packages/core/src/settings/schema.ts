@@ -83,6 +83,16 @@ export const settingsSchemas = {
     /** Agent loop step limit; keeps a Telegram turn inside Workers' subrequest budget. */
     max_agent_steps: z.number().int().min(1).max(8),
   }),
+  outreach: z.object({
+    /** Name shown as the email sender. */
+    sender_name: z.string().min(1),
+    /** Appended to emails and messages by code (never written by the model). */
+    signature: z.string(),
+    /** Playbooks whose first email counts as a cold email (80-word rule, K-10.15). */
+    cold_playbooks: z.array(z.string()),
+    /** Max new drafts per cron tick (quota and Workers subrequest budget). */
+    drafts_per_tick: z.number().int().min(1).max(5),
+  }),
   telegram: z.object({
     /** Reply with synthesized audio too (K-15.2, optional). */
     voice_replies: z.boolean(),

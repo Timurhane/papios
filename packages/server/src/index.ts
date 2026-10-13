@@ -7,3 +7,5 @@ export * from './services/kasif.ts';
 export * from './adapters/instagram.ts';
 export * from './adapters/places.ts';
 export * from './telegram-client.ts';
+export * from './services/mail.ts';
+export * from './services/ulak.ts';

@@ -1,8 +1,12 @@
 import {
   defaultSettings,
   MemoryLLMStore,
+  normalizeDomain,
+  normalizeEmail,
+  normalizePhone,
   type DedupeKeys,
   type Job,
+  type PlaybookStep,
   type QueueStore,
   type Settings,
 } from '@papi/core';
@@ -12,11 +16,121 @@ import type {
   CompanyPatch,
   CompanyRow,
   EmbeddingTable,
+  EnrollmentRow,
+  InboxInput,
   KnowledgeHit,
   NewCompany,
+  PlaybookWithSteps,
   Repo,
+  TouchRow,
+  TouchStatus,
   UsageSummary,
 } from './types.ts';
+
+const step = (
+  p: Partial<PlaybookStep> & Pick<PlaybookStep, 'position' | 'day_offset' | 'channel'>,
+): PlaybookStep => ({
+  anchor: 'start',
+  repeat_every_days: null,
+  angle: 'açı',
+  conditions: {},
+  requires_approval: !['phone_call', 'visit'].includes(p.channel),
+  approval_exempt_kind: null,
+  ...p,
+});
+
+/** Subset of the seeded playbooks (supabase/seed/40_playbooks.sql) for tests. */
+export const TEST_PLAYBOOKS: PlaybookWithSteps[] = [
+  {
+    id: 'pb-soguk-ana',
+    code: 'soguk_ana',
+    name: 'Soğuk Ana',
+    steps: [
+      step({
+        position: 1,
+        day_offset: 1,
+        channel: 'email',
+        angle: 'Analizden tek somut bulgu, en fazla 80 kelime',
+        conditions: { requires: ['email'] },
+      }),
+      step({
+        position: 2,
+        day_offset: 3,
+        channel: 'whatsapp',
+        angle: 'Maile kısa atıf',
+        conditions: { requires: ['phone'] },
+      }),
+      step({
+        position: 3,
+        day_offset: 5,
+        channel: 'instagram_dm',
+        angle: 'Kısa, samimi DM',
+        conditions: { requires: ['instagram'] },
+      }),
+      step({ position: 4, day_offset: 7, channel: 'demo', angle: 'Kişiye özel demo' }),
+      step({ position: 5, day_offset: 10, channel: 'phone_call', angle: 'Telefon' }),
+      step({
+        position: 6,
+        day_offset: 14,
+        channel: 'email',
+        angle: 'Kısa fikir veya örnek',
+        conditions: { requires: ['email'] },
+      }),
+      step({
+        position: 7,
+        day_offset: 17,
+        channel: 'linkedin',
+        angle: 'Kısa LinkedIn mesajı',
+        conditions: { requires: ['linkedin'] },
+      }),
+      step({
+        position: 8,
+        day_offset: 21,
+        channel: 'email',
+        angle: 'Kapanış maili',
+        conditions: { requires: ['email'] },
+      }),
+    ],
+  },
+  {
+    id: 'pb-hafif-soguk',
+    code: 'hafif_soguk',
+    name: 'Hafif Soğuk',
+    steps: [
+      step({ position: 1, day_offset: 1, channel: 'email', conditions: { requires: ['email'] } }),
+      step({ position: 2, day_offset: 14, channel: 'email', conditions: { requires: ['email'] } }),
+    ],
+  },
+  {
+    id: 'pb-simdi-degil',
+    code: 'simdi_degil',
+    name: 'Şimdi Değil',
+    steps: [step({ position: 1, day_offset: 90, channel: 'email' })],
+  },
+];
+
+const TOUCH_DEFAULTS: Omit<TouchRow, 'id' | 'company_id' | 'channel' | 'status'> = {
+  contact_id: null,
+  enrollment_id: null,
+  step_position: null,
+  recipient: null,
+  subject: null,
+  body: null,
+  skip_reason: null,
+  approval_id: null,
+  due_at: null,
+  sent_at: null,
+  provider_message_id: null,
+  thread_id: null,
+  cold: false,
+};
+
+function normalizeFor(kind: string, value: string): string {
+  if (kind === 'email') return normalizeEmail(value) ?? value.toLowerCase();
+  if (kind === 'phone') return normalizePhone(value) ?? value;
+  if (kind === 'domain') return normalizeDomain(value) ?? value.toLowerCase();
+  return value.trim().toLowerCase().replace(/^@/, '');
+}
 
 /** In-memory Repo for tests. Mirrors SupabaseRepo semantics closely enough to test the bot. */
 export class MemoryRepo implements Repo {
@@ -50,6 +164,14 @@ export class MemoryRepo implements Repo {
   }[] = [];
   memories: { subjectId: string; kind: string; content: string }[] = [];
   signalsByCompany = new Map<string, string[]>();
+  playbooks: PlaybookWithSteps[] = structuredClone(TEST_PLAYBOOKS);
+  enrollments: (EnrollmentRow & { stop_reason?: string })[] = [];
+  touches: TouchRow[] = [];
+  inbox: (InboxInput & { id: string })[] = [];
+  suppressed = new Set<string>();
+  tone = { description: '', dos: [] as string[], donts: [] as string[], examples: [] as string[] };
+  banned: string[] = [];
+  founderSlots = { total: 3, used: 0 };
   private seq = 0;
 
   private id() {
@@ -318,6 +440,218 @@ export class MemoryRepo implements Repo {
   }
   async companiesAwaitingAnalysis(limit: number) {
     return this.companies.filter((c) => c.stage === 'new').slice(0, limit);
+  }
+
+  // --- Outreach ---
+  async getPlaybook(code: string) {
+    return this.playbooks.find((p) => p.code === code) ?? null;
+  }
+  async getPlaybookById(id: string) {
+    return this.playbooks.find((p) => p.id === id) ?? null;
+  }
+  async companiesToEnroll(limit: number) {
+    return this.companies
+      .filter(
+        (c) =>
+          c.stage === 'analyzed' &&
+          c.next_step_kind === 'playbook' &&
+          !this.enrollments.some((e) => e.company_id === c.id && e.status === 'active'),
+      )
+      .slice(0, limit);
+  }
+  async createEnrollment(companyId: string, playbookId: string, anchorDate: string | null) {
+    if (
+      this.enrollments.some(
+        (e) => e.company_id === companyId && e.playbook_id === playbookId && e.status === 'active',
+      )
+    ) {
+      throw new Error('duplicate active enrollment');
+    }
+    const id = this.id();
+    this.enrollments.push({
+      id,
+      company_id: companyId,
+      playbook_id: playbookId,
+      status: 'active',
+      started_at: this.now().toISOString(),
+      anchor_date: anchorDate,
+      next_position: 1,
+    });
+    return id;
+  }
+  /** Test clock for started_at. */
+  now = () => new Date();
+  async activeEnrollments(limit: number) {
+    return this.enrollments.filter((e) => e.status === 'active').slice(0, limit);
+  }
+  async updateEnrollment(
+    id: string,
+    patch: Partial<Pick<EnrollmentRow, 'status' | 'next_position'>> & { stop_reason?: string },
+  ) {
+    const e = this.enrollments.find((x) => x.id === id);
+    if (e) Object.assign(e, patch);
+  }
+  async stopEnrollments(companyId: string, reason: string) {
+    const active = this.enrollments.filter(
+      (e) => e.company_id === companyId && e.status === 'active',
+    );
+    active.forEach((e) => Object.assign(e, { status: 'stopped', stop_reason: reason }));
+    if (active.length) {
+      for (const t of this.touches) {
+        if (
+          t.company_id === companyId &&
+          ['drafted', 'awaiting_approval', 'approved', 'scheduled', 'ready'].includes(t.status)
+        ) {
+          Object.assign(t, { status: 'cancelled', skip_reason: reason });
+        }
+      }
+    }
+    return active.length;
+  }
+  /** Mirrors app.enforce_suppression (K-10.13). */
+  private enforceSuppression(t: TouchRow) {
+    if (!['approved', 'scheduled', 'ready', 'sent'].includes(t.status)) return;
+    const kind = (
+      {
+        email: 'email',
+        whatsapp: 'phone',
+        phone_call: 'phone',
+        instagram_dm: 'instagram',
+        linkedin: 'linkedin',
+        x: 'x',
+      } as Record<string, string>
+    )[t.channel];
+    const hit =
+      (kind && t.recipient && this.suppressed.has(`${kind}:${normalizeFor(kind, t.recipient)}`)) ||
+      (t.channel === 'email' &&
+        t.recipient?.includes('@') &&
+        this.suppressed.has(`domain:${normalizeFor('domain', t.recipient.split('@')[1] ?? '')}`)) ||
+      this.suppressed.has(`company:${t.company_id}`);
+    if (hit) throw new Error('recipient is on the suppression list');
+  }
+  async createTouch(t: Partial<TouchRow> & Pick<TouchRow, 'company_id' | 'channel' | 'status'>) {
+    const row: TouchRow = { ...TOUCH_DEFAULTS, ...t, id: this.id() };
+    this.enforceSuppression(row);
+    this.touches.push(row);
+    return row.id;
+  }
+  async updateTouch(id: string, patch: Partial<Omit<TouchRow, 'id'>>) {
+    const t = this.touches.find((x) => x.id === id);
+    if (!t) throw new Error('touch not found');
+    this.enforceSuppression({ ...t, ...patch });
+    Object.assign(t, patch);
+  }
+  async getTouch(id: string) {
+    return this.touches.find((t) => t.id === id) ?? null;
+  }
+  async touchForStep(enrollmentId: string, position: number) {
+    return (
+      [...this.touches]
+        .reverse()
+        .find((t) => t.enrollment_id === enrollmentId && t.step_position === position) ?? null
+    );
+  }
+  async touchByApproval(approvalId: string) {
+    return this.touches.find((t) => t.approval_id === approvalId) ?? null;
+  }
+  async touchesByStatus(statuses: TouchStatus[], limit: number, dueBefore?: Date) {
+    return this.touches
+      .filter(
+        (t) =>
+          statuses.includes(t.status) &&
+          (!dueBefore || (t.due_at !== null && Date.parse(t.due_at) <= dueBefore.getTime())),
+      )
+      .slice(0, limit);
+  }
+  async findTouchForReply(threadId: string | null, from: string) {
+    return (
+      (threadId && this.touches.find((t) => t.thread_id === threadId)) ||
+      [...this.touches]
+        .reverse()
+        .find((t) => t.status === 'sent' && t.recipient?.toLowerCase() === from.toLowerCase()) ||
+      null
+    );
+  }
+  async emailsSentSince(since: Date) {
+    return this.touches.filter(
+      (t) =>
+        t.channel === 'email' &&
+        t.status === 'sent' &&
+        t.sent_at &&
+        Date.parse(t.sent_at) >= since.getTime(),
+    ).length;
+  }
+  async firstEmailSentAt() {
+    return (
+      this.touches
+        .filter((t) => t.channel === 'email' && t.sent_at)
+        .map((t) => t.sent_at as string)
+        .sort()[0] ?? null
+    );
+  }
+  async lastEmailSentAt() {
+    return (
+      this.touches
+        .filter((t) => t.channel === 'email' && t.sent_at)
+        .map((t) => t.sent_at as string)
+        .sort()
+        .at(-1) ?? null
+    );
+  }
+  async sentToRecipientLast7Days(recipient: string) {
+    const since = this.now().getTime() - 7 * 86_400_000;
+    return this.touches.filter(
+      (t) =>
+        t.recipient === recipient &&
+        t.status === 'sent' &&
+        t.sent_at &&
+        Date.parse(t.sent_at) > since,
+    ).length;
+  }
+  async isSuppressed(kind: string, value: string) {
+    return this.suppressed.has(`${kind}:${normalizeFor(kind, value)}`);
+  }
+  async suppress(kind: string, value: string) {
+    this.suppressed.add(`${kind}:${normalizeFor(kind, value)}`);
+  }
+  async addInboxMessage(m: InboxInput) {
+    if (this.inbox.some((x) => x.providerMessageId === m.providerMessageId)) return null;
+    const id = this.id();
+    this.inbox.push({ ...m, id });
+    return id;
+  }
+  async toneProfile() {
+    return this.tone;
+  }
+  async bannedPhrases() {
+    return this.banned;
+  }
+  async recentStyleCorrections(draftKind: string, limit: number) {
+    return (
+      this.styleMemory as {
+        draftKind: string;
+        verdict: string;
+        original: string;
+        instruction: string | null;
+        revised: string | null;
+      }[]
+    )
+      .filter((m) => m.draftKind === draftKind && m.verdict !== 'approved')
+      .slice(-limit)
+      .map(({ original, instruction, revised }) => ({ original, instruction, revised }));
+  }
+  async founderSlotsAvailable() {
+    return this.founderSlots.used < this.founderSlots.total;
+  }
+  async latestAnalysis(companyId: string) {
+    const a = [...this.analyses]
+      .reverse()
+      .find((x) => x.companyId === companyId && x.status !== 'failed');
+    return a ? { findings: a.findings, strongest_finding: a.strongestFinding } : null;
+  }
+  async primaryContact(companyId: string) {
+    const c = this.contacts.find((x) => x.companyId === companyId);
+    return c ? { id: `contact-${companyId}`, full_name: c.full_name ?? null } : null;
   }
 }
 

@@ -95,6 +95,13 @@ export const defaultSettings: Settings = {
     cache_ttl_days: 30,
     max_agent_steps: 4,
   },
+  // V-41: signature and sender until Timurhan edits them in Settings
+  outreach: {
+    sender_name: 'Timurhan | AJNA Digital',
+    signature: 'Timurhan\nAJNA Digital · ajnadigitalagency.com',
+    cold_playbooks: ['soguk_ana', 'hafif_soguk', 'sinyal', 'uyandirma'],
+    drafts_per_tick: 2,
+  },
   telegram: { voice_replies: false, approvals_per_message: 8 },
   // K-15.5
   night_shift: { auto_window: null, urgent_as_silent: true },

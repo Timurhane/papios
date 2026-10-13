@@ -1,4 +1,4 @@
-import type { DedupeKeys, LLMStore, QueueStore, Settings } from '@papi/core';
+import type { Channel, DedupeKeys, LLMStore, PlaybookStep, QueueStore, Settings } from '@papi/core';
 
 export interface KnowledgeHit {
   id: string;
@@ -92,6 +92,67 @@ export interface AnalysisRecord {
   findings: string[];
   strongestFinding: string | null;
   error?: string | null;
+}
+
+export type TouchStatus =
+  | 'drafted'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'scheduled'
+  | 'ready'
+  | 'sent'
+  | 'skipped'
+  | 'cancelled'
+  | 'failed';
+
+export interface TouchRow {
+  id: string;
+  company_id: string;
+  contact_id: string | null;
+  enrollment_id: string | null;
+  step_position: number | null;
+  channel: Channel;
+  recipient: string | null;
+  subject: string | null;
+  body: string | null;
+  status: TouchStatus;
+  skip_reason: string | null;
+  approval_id: string | null;
+  due_at: string | null;
+  sent_at: string | null;
+  provider_message_id: string | null;
+  thread_id: string | null;
+  cold: boolean;
+}
+
+export interface PlaybookWithSteps {
+  id: string;
+  code: string;
+  name: string;
+  steps: PlaybookStep[];
+}
+
+export interface EnrollmentRow {
+  id: string;
+  company_id: string;
+  playbook_id: string;
+  status: 'active' | 'paused' | 'stopped' | 'completed';
+  started_at: string;
+  anchor_date: string | null;
+  next_position: number;
+}
+
+export interface InboxInput {
+  companyId: string | null;
+  touchId: string | null;
+  channel: 'email';
+  providerMessageId: string;
+  threadId: string | null;
+  from: string;
+  subject: string | null;
+  body: string;
+  receivedAt: string;
+  classification: string;
 }
 
 /** Everything the Worker reads or writes, scoped to one tenant. */
@@ -200,4 +261,57 @@ export interface Repo {
   companiesAwaitingAnalysis(limit: number): Promise<CompanyRow[]>;
   searchCompanies(query: string, limit: number): Promise<CompanyRow[]>;
   countQueuedJobs(heavy: boolean): Promise<number>;
+
+  // --- Outreach (Phase 3) ---
+  getPlaybook(code: string): Promise<PlaybookWithSteps | null>;
+  getPlaybookById(id: string): Promise<PlaybookWithSteps | null>;
+  companiesToEnroll(limit: number): Promise<CompanyRow[]>;
+  createEnrollment(
+    companyId: string,
+    playbookId: string,
+    anchorDate: string | null,
+  ): Promise<string>;
+  activeEnrollments(limit: number): Promise<EnrollmentRow[]>;
+  updateEnrollment(
+    id: string,
+    patch: Partial<Pick<EnrollmentRow, 'status' | 'next_position'>> & { stop_reason?: string },
+  ): Promise<void>;
+  stopEnrollments(companyId: string, reason: string): Promise<number>;
+  createTouch(
+    t: Partial<TouchRow> & Pick<TouchRow, 'company_id' | 'channel' | 'status'>,
+  ): Promise<string>;
+  updateTouch(id: string, patch: Partial<Omit<TouchRow, 'id'>>): Promise<void>;
+  getTouch(id: string): Promise<TouchRow | null>;
+  touchForStep(enrollmentId: string, position: number): Promise<TouchRow | null>;
+  touchByApproval(approvalId: string): Promise<TouchRow | null>;
+  touchesByStatus(statuses: TouchStatus[], limit: number, dueBefore?: Date): Promise<TouchRow[]>;
+  findTouchForReply(threadId: string | null, from: string): Promise<TouchRow | null>;
+  emailsSentSince(since: Date): Promise<number>;
+  firstEmailSentAt(): Promise<string | null>;
+  lastEmailSentAt(): Promise<string | null>;
+  sentToRecipientLast7Days(recipient: string): Promise<number>;
+  isSuppressed(kind: string, value: string): Promise<boolean>;
+  suppress(
+    kind: string,
+    value: string,
+    reason: 'unsubscribe_link' | 'asked_not_to_contact' | 'manual' | 'data_deletion',
+    source: string,
+  ): Promise<void>;
+  addInboxMessage(m: InboxInput): Promise<string | null>;
+  toneProfile(): Promise<{
+    description: string;
+    dos: string[];
+    donts: string[];
+    examples: string[];
+  }>;
+  bannedPhrases(): Promise<string[]>;
+  recentStyleCorrections(
+    draftKind: string,
+    limit: number,
+  ): Promise<{ original: string; instruction: string | null; revised: string | null }[]>;
+  founderSlotsAvailable(): Promise<boolean>;
+  latestAnalysis(
+    companyId: string,
+  ): Promise<{ findings: string[]; strongest_finding: string | null } | null>;
+  primaryContact(companyId: string): Promise<{ id: string; full_name: string | null } | null>;
 }

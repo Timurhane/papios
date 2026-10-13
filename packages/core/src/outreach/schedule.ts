@@ -70,6 +70,12 @@ export function nextBusinessTime(from: Date, h: Hours): Date {
   throw new Error('no business day within two weeks; check business_hours settings');
 }
 
+/** UTC instant of local midnight of the day containing `date`. */
+export function startOfLocalDay(date: Date, timeZone: string): Date {
+  const p = parts(date, timeZone);
+  return zoned(p.y, p.m, p.d, 0, timeZone);
+}
+
 /** Local calendar date (YYYY-MM-DD) in the business timezone. */
 export function localDate(date: Date, timeZone: string): string {
   const p = parts(date, timeZone);
