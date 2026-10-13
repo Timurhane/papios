@@ -251,3 +251,4 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-21** Panel, Cloudflare Pages'in Git entegrasyonuyla yayınlanır (build Cloudflare'de olur, GitHub Actions dakikası harcamaz).
 - **V-22** Canlı veritabanına migration, yalnızca elle tetiklenen `DB deploy` iş akışıyla uygulanır.
 - **V-23** `SUPABASE_ACCESS_TOKEN` mobil kurulum kolaylığı için "Full access" kapsamıyla, 90 günlük oluşturuldu. Faz 7 güvenlik gözden geçirmesinde yalnızca gereken izinlerle (proje okuma, veritabanı ve auth yapılandırması yazma) yeniden oluşturulacak.
+- **V-24** Canlı kurulum (GitHub secrets, DB deploy, Pages, Faz 1 anahtarları) bilgisayar başında tek oturuma ertelendi. Oluşturulan ilk Supabase token'ı kullanılmadan iptal edilecek.

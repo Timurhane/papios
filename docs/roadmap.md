@@ -9,7 +9,8 @@ Durum: ⬜ yapılmadı · ✅ tamam. Kaynak: talimat Bölüm 18.
 - [x] CI: GitHub Actions'ta lint + typecheck + test + RLS testleri
 - [x] Gizli bilgi taraması (gitleaks, pre-commit + CI)
 - [x] Hesap ve anahtar kontrol listesi yazıldı (`docs/setup/accounts.md`)
-- [ ] Faz 0 hesapları açıldı: Supabase, GitHub secrets, panel kullanıcısı, Cloudflare Pages
+- [x] Supabase projesi açıldı (ref `rumwebxglpdvssxlhize`), PR #1 `main`'e birleşti
+- [ ] **Ertelendi → toplu canlı kurulum oturumu (bilgisayar başında):** GitHub secrets, DB deploy, panel kullanıcısı, Cloudflare Pages
 - [ ] Canlıda giriş + TOTP denendi
 - [x] `docs/free-tier-limits.md` (resmi kaynak linkli)
 - [x] Supabase şeması: multi-tenant, RLS, migration
@@ -17,6 +18,11 @@ Durum: ⬜ yapılmadı · ✅ tamam. Kaynak: talimat Bölüm 18.
 - [x] Panel iskeleti (Türkçe, siyah + mor-mavi tema, mobil) + giriş + zorunlu TOTP
 - [x] Worker iskeleti (Hono, sağlık ucu)
 - [ ] **Kabul:** Giriş çalışıyor (yerelde testli; canlı bekliyor) · ✅ RLS testleri başka kiracı verisinin okunamadığını kanıtlıyor · ✅ CI yeşil
+
+## Toplu canlı kurulum oturumu
+
+Mobilde GitHub Settings açılamadığı için canlı kurulum tek oturuma toplandı (`docs/setup/accounts.md` sırasıyla).
+En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Telegram gerektirir.
 
 ## Faz 1 — Beyin ve Telegram
 
