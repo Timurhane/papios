@@ -166,4 +166,83 @@ describe.skipIf(!url || !key)('SupabaseRepo against real Supabase', () => {
     expect(await r.hitRateLimit(`it:${tag}`, 60, 1)).toBe(true);
     expect(await r.hitRateLimit(`it:${tag}`, 60, 1)).toBe(false);
   });
+
+  it('operations: project, setup form rpc, charges, metrics, notes', async () => {
+    const r = repo();
+    const companyId = await r.createCompany({
+      name: `OPS ${tag}`,
+      name_norm: `ops ${tag}`,
+      source: 'manual',
+    });
+    await r.updateCompany(companyId, {
+      next_step_kind: 'waiting',
+      waiting_reason: 'it',
+      waiting_until: '2030-01-01',
+    });
+    const projectId = await r.createProject({
+      company_id: companyId,
+      proposal_id: null,
+      name: 'OPS',
+      package_code: 'refleks',
+      payment_path: 'no_setup',
+      monthly_kurus: 1_750_000,
+      setup_fee_kurus: 0,
+      project_kurus: null,
+      started_on: '2026-10-13',
+      contract_end: '2027-10-12',
+      metrics_token: `${tag}`.padEnd(43, 'm'),
+    });
+    expect((await r.getProject(projectId))?.monthly_kurus).toBe(1_750_000);
+    const token = `${tag}`.padEnd(43, 'f');
+    await r.createSetupForm({
+      project_id: projectId,
+      token,
+      package_code: 'refleks',
+      expires_at: '2030-01-01T00:00:00Z',
+    });
+    expect((await r.setupFormByToken(token)).businessName).toBe(`OPS ${tag}`);
+    expect(await r.submitSetupForm(token, { hours: '9-18' })).toBe(true);
+    expect(await r.submitSetupForm(token, { hours: 'x' })).toBe(false);
+    await r.replaceProjectTasks(projectId, [{ title: 'a', module: null }]);
+    expect(await r.projectTasks(projectId)).toEqual([
+      { title: 'a', module_code: null, done: false },
+    ]);
+    await r.upsertArtifact(projectId, 'claude_prompt', 'v1');
+    await r.upsertArtifact(projectId, 'claude_prompt', 'v2');
+    expect(await r.artifacts(projectId)).toEqual([{ kind: 'claude_prompt', content: 'v2' }]);
+    const subId = await r.createSubscription({
+      company_id: companyId,
+      project_id: projectId,
+      monthly_kurus: 1_750_000,
+      discounted_monthly_kurus: null,
+      discount_months: 0,
+      started_on: '2026-10-13',
+      commitment_months: 12,
+      day_of_month: 13,
+    });
+    const charge = {
+      company_id: companyId,
+      subscription_id: subId,
+      project_id: projectId,
+      kind: 'monthly' as const,
+      amount_kurus: 1_750_000,
+      due_on: '2026-10-13',
+    };
+    expect(await r.ensurePayment(charge)).toBe(true);
+    expect(await r.ensurePayment(charge)).toBe(false);
+    const due = (await r.duePayments(500)).find((p) => p.subscription_id === subId)!;
+    expect(due.amount_kurus).toBe(1_750_000);
+    await r.markPayment(due.id, { status: 'paid', paid_on: '2026-10-14' });
+    await r.upsertModuleMetrics(projectId, '2026-10-01', { messages_in: 5 });
+    expect(await r.moduleMetrics(projectId, '2026-10-01')).toEqual({ messages_in: 5 });
+    await r.addNote({
+      body: `not ${tag}`,
+      tags: ['it'],
+      source: 'panel',
+      company_id: companyId,
+      project_id: null,
+    });
+    expect((await r.recentNotes(5, tag)).length).toBe(1);
+    expect(await r.companyFacts(companyId)).toEqual({ satisfaction_positive: false });
+  });
 });
