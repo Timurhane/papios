@@ -1,0 +1,99 @@
+import { Link } from 'react-router';
+import { ErrorText } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
+import { nextStepText } from '@/crm/labels';
+import { ScoreBadge } from '@/crm/ScoreBadge';
+import { usePanelApi } from '@/data/PanelApiContext';
+import type { CompanySummary } from '@/data/types';
+import { useAsync } from '@/data/useAsync';
+
+/** Bugün (K-13.2), first version: approvals, fresh analyses, due waiting items, quota. */
+export function TodayPage() {
+  const api = usePanelApi();
+  const { data, error, loading } = useAsync(() => api.today(), 'today');
+
+  return (
+    <section className="flex flex-col gap-5">
+      <h1 className="text-2xl font-semibold tracking-tight">Bugün</h1>
+      <ErrorText>{error}</ErrorText>
+      {loading && (
+        <p className="text-sm text-muted" role="status">
+          Yükleniyor…
+        </p>
+      )}
+      {data && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card>
+            <h2 className="mb-3 font-semibold">
+              Onay bekleyenler ({data.pendingApprovals.length})
+            </h2>
+            {data.pendingApprovals.length === 0 ? (
+              <p className="text-sm text-muted">Onay bekleyen iş yok ✅</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {data.pendingApprovals.map((a) => (
+                  <li key={a.id}>{a.title}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-xs text-muted">
+              Onaylar şimdilik Telegram'dan (/onaylar); panelden onay Faz 3'te.
+            </p>
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">Son 24 saatte analiz edilenler</h2>
+            <CompanyRows
+              items={data.recentlyAnalyzed}
+              empty="Yeni analiz yok. Telegram'a bir işletme linki gönder."
+            />
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">Vadesi gelen beklemeler</h2>
+            <CompanyRows items={data.dueWaiting} empty="Vadesi gelen kayıt yok." />
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">Kota durumu (bugün)</h2>
+            {data.quota.length === 0 ? (
+              <p className="text-sm text-muted">Bugün henüz yapay zeka çağrısı yapılmadı.</p>
+            ) : (
+              <ul className="space-y-1 text-sm tabular-nums">
+                {data.quota.map((q) => (
+                  <li key={q.bucket} className="flex justify-between">
+                    <span>{q.bucket}</span>
+                    <span>{q.used}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      )}
+      <p className="text-xs text-muted">
+        Aramalar, ziyaretler, sıcak cevaplar ve tek tık kuyruğu Faz 3'te bu ekrana eklenecek.
+      </p>
+    </section>
+  );
+}
+
+function CompanyRows({ items, empty }: { items: CompanySummary[]; empty: string }) {
+  if (items.length === 0) return <p className="text-sm text-muted">{empty}</p>;
+  return (
+    <ul className="space-y-2">
+      {items.map((c) => (
+        <li key={c.id}>
+          <Link
+            to={`/crm/${c.id}`}
+            className="flex items-center gap-3 rounded-lg p-1 hover:bg-surface-2"
+          >
+            <ScoreBadge score={c.score} className="h-6 min-w-9" />
+            <span className="min-w-0 flex-1 truncate text-sm">{c.name}</span>
+            <span className="hidden truncate text-xs text-muted sm:block">{nextStepText(c)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}

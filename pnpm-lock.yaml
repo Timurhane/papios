@@ -88,6 +88,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@papi/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@supabase/supabase-js':
         specifier: ^2.117.3
         version: 2.117.3

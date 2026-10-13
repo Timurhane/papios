@@ -6,6 +6,8 @@ import { App } from '@/App';
 import { tr } from '@/i18n/tr';
 import { panelModules } from '@/modules';
 import { createFakeAuthClient } from '@/test/fake-auth-client';
+import { PanelApiProvider } from '@/data/PanelApiContext';
+import { FakePanelApi } from '@/test/fake-panel-api';
 import { AuthProvider } from './AuthContext';
 
 const creds = { email: 'owner@ajna.test', password: 'correct horse', totpCode: '123456' };
@@ -15,7 +17,9 @@ function renderApp(hasFactor = false) {
   render(
     <MemoryRouter>
       <AuthProvider client={fake.client}>
-        <App />
+        <PanelApiProvider api={new FakePanelApi()}>
+          <App />
+        </PanelApiProvider>
       </AuthProvider>
     </MemoryRouter>,
   );

@@ -7,6 +7,8 @@ import { AuthProvider } from './auth/AuthContext';
 import { createSupabaseAuthClient } from './auth/auth-client';
 import { ConfigMissing } from './ConfigMissing';
 import { readPublicConfig } from './lib/config';
+import { PanelApiProvider } from './data/PanelApiContext';
+import { createSupabasePanelApi } from './data/supabase-api';
 import './index.css';
 
 const container = document.getElementById('root');
@@ -23,7 +25,9 @@ if (!config) {
     <StrictMode>
       <BrowserRouter>
         <AuthProvider client={authClient}>
-          <App />
+          <PanelApiProvider api={createSupabasePanelApi(supabase)}>
+            <App />
+          </PanelApiProvider>
         </AuthProvider>
       </BrowserRouter>
     </StrictMode>,
