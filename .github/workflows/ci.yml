@@ -46,17 +46,34 @@ jobs:
       - run: gitleaks git --redact --no-banner --config .gitleaks.toml
 
   database:
-    name: Database (migrations, seed, RLS tests)
+    name: Database (migrations, seed, RLS tests, repo integration)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: supabase/setup-cli@v1
         with:
           version: 2.120.0
-      - run: supabase db start
-      - run: supabase db reset
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Database + API gateway + PostgREST only (auth is needed by the schema, not as a service).
+      - run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: supabase test db
+      - name: Repo integration tests (real PostgREST)
+        run: |
+          eval "$(supabase status -o json | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const j=JSON.parse(s);
+              const key=j.SERVICE_ROLE_KEY||j.SECRET_KEY;
+              console.log(`export SUPABASE_IT_URL=${j.API_URL}`);
+              console.log(`export SUPABASE_IT_SERVICE_KEY=${key}`);
+            })')"
+          test -n "$SUPABASE_IT_SERVICE_KEY"
+          pnpm vitest run --project api src/repo/supabase.integration.test.ts
 
   e2e:
     name: Panel smoke (Playwright)
