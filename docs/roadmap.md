@@ -37,11 +37,12 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 2 — Aday ve analiz
 
-- [ ] CRM veri modeli ve ekranları, mükerrer kontrolü
-- [ ] Kaşif: grounding araması, OSM, CSV, Telegram link, Instagram business discovery, kapalı Places adaptörü
-- [ ] Analist: Actions'ta Playwright, PageSpeed, kural tabanlı kontroller, model analizi, puan + gerekçe
-- [ ] Bugün ekranı (ilk hali)
-- [ ] **Kabul:** Telegram'a atılan link 5 dk içinde puanlı ve analizli firma kartı
+- [x] CRM veri modeli ve ekranları (liste, kanban, firma kartı), mükerrer kontrolü
+- [x] Kaşif: grounding araması, OSM, CSV, Telegram link, Instagram business discovery, kapalı Places adaptörü
+- [x] Analist: Actions'ta Playwright, PageSpeed, kural tabanlı kontroller, model analizi, puan + gerekçe
+- [x] Bugün ekranı (ilk hali)
+- [x] Papi araçları: isimle aday ekleme, CRM'de arama, web/OSM araması başlatma
+- [ ] **Kabul:** Telegram'a atılan link 5 dk içinde puanlı ve analizli firma kartı (testli: tek cron turunda; canlı bekliyor)
 
 ## Faz 3 — Ulaşma
 

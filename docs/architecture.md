@@ -176,3 +176,28 @@ Telegram ──POST /telegram/webhook (secret token)──► Worker
 - Kod düzeni: saf mantık `packages/core` (llm, agent, queue, telegram); Worker'a özgü olanlar `apps/api`
   (`bot.ts`, `repo/`, `jobs/`, `telegram/client.ts`). `Repo` arayüzünün bellek içi uygulaması testlerde,
   Supabase uygulaması canlıda; ikincisi CI'da gerçek PostgREST'e karşı entegrasyon testinden geçer.
+
+## 14. Faz 2: Aday → analiz → puan
+
+```
+Telegram linki / Papi aracı ──► jobs: lead.add_from_link (hafif, öncelik 10)
+                                   │  cron (her dk, tur başına 1 iş)
+                                   ▼
+                     Kaşif.addFromLink: site | Instagram (Graph API) | Harita adı (+ grounding, doğrulanır)
+                                   ▼
+                     Analist.analyzeCompanies:
+                       fetchSite (HTTP, 200 KB) ─┐   okunamazsa → analysis.deep_crawl (ağır, Playwright)
+                       PageSpeed mobil+masaüstü  ├─► kurallar (sinyaller) → tek model çağrısı (5 firma/çağrı)
+                       sektör/il kuralları      ─┘   → puan (K-9.3) + gerekçe → sıradaki adım (K-9.4)
+                                   ▼
+                     companies + analyses + score_history + company_events + contacts + memory_items
+                                   ▼
+                     Telegram kartı (puan, en güçlü bulgu, gerekçe, panel linki)
+
+CSV (panel) / OSM / web araması ──► ağır işler (GitHub Actions, 6 saatte bir veya anında tetikleme)
+                                   ──► importRows (mükerrer kontrolü) ──► analysis.batch
+```
+
+- Ortak sunucu kodu `packages/server`: `Repo` (Supabase + bellek içi), Analist ve Kaşif servisleri, Instagram ve
+  (kapalı) Places adaptörleri, Telegram istemcisi. Hem Worker (`apps/api`) hem Actions işçisi (`apps/jobs`) kullanır.
+- Panel veriye kullanıcının kendi oturumuyla erişir (`PanelApi`): RLS (kiracı + TOTP) her sorguda geçerlidir.

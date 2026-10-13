@@ -6,20 +6,20 @@
 
 Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
 
-| #   | Hesap                                                  | Gerektiği faz                                         | Durum |
-| --- | ------------------------------------------------------ | ----------------------------------------------------- | ----- |
-| 1   | Supabase projesi                                       | Faz 0                                                 | ⬜    |
-| 2   | GitHub Actions secrets (Supabase)                      | Faz 0                                                 | ⬜    |
-| 3   | Panel kullanıcısı + sahiplik bağlantısı                | Faz 0                                                 | ⬜    |
-| 4   | Cloudflare hesabı + Pages (panel yayını)               | Faz 0                                                 | ⬜    |
-| 5   | Google AI Studio (Gemini) anahtarı                     | Faz 1                                                 | ⏸     |
-| 6   | Groq anahtarı                                          | Faz 1                                                 | ⏸     |
-| 7   | Telegram botu (BotFather) + kullanıcı kimliğin         | Faz 1                                                 | ⏸     |
-| 8   | Cloudflare Workers secrets                             | Faz 1                                                 | ⏸     |
-| 9   | Meta geliştirici uygulaması + Instagram işletme hesabı | Faz 2 (onay süreci uzun olabilir; erken başlanabilir) | ⏸     |
-| 10  | Google Cloud: PageSpeed Insights API anahtarı          | Faz 2                                                 | ⏸     |
-| 11  | Natro mail bilgileri (yalnızca A-1 kararı için)        | Faz 3 öncesi                                          | ⏸     |
-| 12  | Turnstile site anahtarı                                | Faz 7                                                 | ⏸     |
+| #   | Hesap                                                  | Gerektiği faz                                   | Durum |
+| --- | ------------------------------------------------------ | ----------------------------------------------- | ----- |
+| 1   | Supabase projesi                                       | Faz 0                                           | ⬜    |
+| 2   | GitHub Actions secrets (Supabase)                      | Faz 0                                           | ⬜    |
+| 3   | Panel kullanıcısı + sahiplik bağlantısı                | Faz 0                                           | ⬜    |
+| 4   | Cloudflare hesabı + Pages (panel yayını)               | Faz 0                                           | ⬜    |
+| 5   | Google AI Studio (Gemini) anahtarı                     | Faz 1                                           | ⏸     |
+| 6   | Groq anahtarı                                          | Faz 1                                           | ⏸     |
+| 7   | Telegram botu (BotFather) + kullanıcı kimliğin         | Faz 1                                           | ⏸     |
+| 8   | Cloudflare Workers secrets                             | Faz 1                                           | ⏸     |
+| 9   | Meta geliştirici uygulaması + Instagram işletme hesabı | Faz 2 (isteğe bağlı; onay süreci uzun olabilir) | ⬜    |
+| 10  | Google Cloud: PageSpeed Insights API anahtarı          | Faz 2                                           | ⬜    |
+| 11  | Natro mail bilgileri (yalnızca A-1 kararı için)        | Faz 3 öncesi                                    | ⏸     |
+| 12  | Turnstile site anahtarı                                | Faz 7                                           | ⏸     |
 
 ---
 
@@ -80,7 +80,8 @@ Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
    - Değişkenleri hem **Production** hem **Preview** ortamına gir.
    - **Secret key / service_role anahtarını buraya asla koyma.**
    - Not: PR #1 `main`'e birleşene kadar `main` boş; Faz 0 kabul testini PR dalının **Preview** adresiyle yaparız.
-4. Yayın bitince çıkan `https://papi-xxx.pages.dev` adresini Supabase → **Authentication → URL Configuration → Site URL**
+4. Yayın bitince çıkan `https://papi-xxx.pages.dev` adresini GitHub → Settings → Secrets and variables → Actions →
+   **Variables** sekmesine `PANEL_URL` olarak ekle (Telegram kartlarındaki linkler için). Aynı adresi Supabase → **Authentication → URL Configuration → Site URL**
    alanına yaz.
 5. Adrese gir: giriş yap → QR kodu doğrulama uygulamanla okut → 6 haneli kodu gir → panel açılır.
    Bana sonucu yaz (sorun varsa ekran görüntüsü).
@@ -120,6 +121,35 @@ Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
 4. Bana haber ver: **API deploy** iş akışını çalıştırırım. Worker yayınlanır, secret'lar Worker'a aktarılır ve
    Telegram webhook'u kurulur. Sonra bota sesli not atıp Faz 1 kabul testini birlikte yaparız.
 
-## 9–12. İleriki fazlar
+## 9. Instagram (isteğe bağlı)
+
+Instagram linklerinden işletme bilgisi (site, biyografi) çekmek için. Olmadan da Papi çalışır; Instagram linki
+gelince "site linki gönder" der.
+
+1. Instagram hesabın **İşletme** veya **İçerik üreticisi** hesabı olmalı ve bir Facebook sayfasına bağlı olmalı.
+2. https://developers.facebook.com → **Uygulama oluştur** → tür: İşletme. Kart istenirse dur.
+3. Uygulamaya **Instagram Graph API** ürününü ekle; Graph API Explorer'da `instagram_basic` ve
+   `pages_show_list` izinleriyle uzun ömürlü bir erişim anahtarı al.
+4. GitHub secrets: `IG_ACCESS_TOKEN` (anahtar), `IG_BUSINESS_ACCOUNT_ID` (Instagram işletme hesabının sayısal kimliği).
+   Bu adımı birlikte, ekranda yaparız; Meta'nın arayüzü sık değişiyor.
+
+## 10. PageSpeed Insights anahtarı
+
+Anahtarsız da çalışır ama çok kısıtlıdır.
+
+1. https://console.cloud.google.com → yeni proje `papi` (faturalandırma **açma**).
+2. **APIs & Services → Library → PageSpeed Insights API → Enable**.
+3. **Credentials → Create credentials → API key** → anahtarı yalnızca PageSpeed Insights API ile kısıtla.
+4. GitHub secret: `PAGESPEED_API_KEY`.
+
+## Anında ağır iş tetikleme (isteğe bağlı)
+
+Ağır işler (Playwright derin tarama, CSV/OSM/web araması) normalde 6 saatte bir çalışır. Anında çalışsın istersen:
+
+1. GitHub → **Settings → Developer settings → Fine-grained tokens → Generate new token**; Repository access:
+   yalnızca `Timurhane/papios`; Permissions → **Actions: Read and write**. Süre: 90 gün.
+2. GitHub secret: `GITHUB_DISPATCH_TOKEN` (repo adı deploy sırasında otomatik eklenir).
+
+## 11–12. İleriki fazlar
 
 Bu adımlar ilgili faz başlarken tek tek, aynı ayrıntıda verilecek.
