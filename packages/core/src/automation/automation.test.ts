@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SiteSignals } from '../analysis/html.ts';
 import { suggestPlaybookChanges, suggestRules } from './learning.ts';
-import { funnel, median } from './metrics.ts';
+import { firstReplyHours, funnel, median } from './metrics.ts';
 import { haversineKm, planRoute } from './route.ts';
 import { describeSchedule, nextRun, validateRoutine } from './routines.ts';
 import { diffSiteFeatures, siteFeatures } from './signals.ts';
@@ -160,5 +160,24 @@ describe('funnel (K-16.2)', () => {
     expect(f.map((s) => s.rate)).toEqual([null, 0.2, 0.5, 0.5, 0.8, 0]);
     expect(median([5, 1, 3])).toBe(3);
     expect(median([])).toBeNull();
+  });
+});
+
+describe('first reply time (K-16.1)', () => {
+  it('is the median of per-company hours from first touch to first later reply', () => {
+    const sent = [
+      { company_id: 'a', at: '2026-10-01T09:00:00Z' },
+      { company_id: 'a', at: '2026-10-03T09:00:00Z' },
+      { company_id: 'b', at: '2026-10-01T09:00:00Z' },
+      { company_id: 'c', at: '2026-10-01T09:00:00Z' },
+    ];
+    const replies = [
+      { company_id: 'a', at: '2026-10-01T11:00:00Z' }, // 2 h
+      { company_id: 'b', at: '2026-10-02T09:00:00Z' }, // 24 h
+      { company_id: 'b', at: '2026-10-05T09:00:00Z' },
+      { company_id: 'd', at: '2026-10-01T10:00:00Z' }, // never contacted
+    ];
+    expect(firstReplyHours(sent, replies)).toBe(13);
+    expect(firstReplyHours(sent, [])).toBeNull();
   });
 });

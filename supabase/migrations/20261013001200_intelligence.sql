@@ -146,3 +146,22 @@ as $$
 $$;
 revoke all on function app.notes_to_embed(uuid, integer) from public;
 grant execute on function app.notes_to_embed(uuid, integer) to service_role;
+
+-- K-3.18: an address is geocoded once (found or not); a changed address is looked up again.
+alter table public.companies add column geocoded_at timestamptz;
+create function app.reset_geocode()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.address is distinct from old.address and new.geocoded_at is not distinct from old.geocoded_at then
+    new.lat := null;
+    new.lng := null;
+    new.geocoded_at := null;
+  end if;
+  return new;
+end;
+$$;
+create trigger companies_reset_geocode before update of address on public.companies
+  for each row execute function app.reset_geocode();

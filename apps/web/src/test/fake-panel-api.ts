@@ -1,5 +1,10 @@
 import { defaultSettings, quotePaths } from '@papi/core';
 import type {
+  ContentItem,
+  MapCompany,
+  MetricsFilter,
+  MetricsSummary,
+  RoutineItem,
   FinanceEntry,
   NoteItem,
   PaymentItem,
@@ -568,5 +573,146 @@ export class FakePanelApi implements PanelApi {
       company_id: null,
       created_at: '2026-10-13T10:00:00Z',
     });
+  }
+
+  // --- Phase 6 ---
+  routines: RoutineItem[] = [
+    {
+      id: 'r1',
+      code: 'sabah_brifingi',
+      name: 'Sabah brifingi',
+      action: 'morning_brief',
+      schedule: { kind: 'weekdays', time: '08:45' },
+      params: {},
+      enabled: true,
+      source: 'preset',
+      next_run_at: '2026-10-14T05:45:00Z',
+      last_run_at: '2026-10-13T05:45:00Z',
+      last_result: '☀️ Günaydın, bugün: • Onay bekleyen: 2',
+    },
+    {
+      id: 'r2',
+      code: 'haftalik_patron_ozeti',
+      name: 'Haftalık patron özeti',
+      action: 'weekly_summary',
+      schedule: { kind: 'weekly', time: '17:00', days: [5] },
+      params: {},
+      enabled: true,
+      source: 'preset',
+      next_run_at: null,
+      last_run_at: null,
+      last_result: null,
+    },
+  ];
+  async listRoutines() {
+    return this.routines;
+  }
+  async updateRoutine(id: string, patch: Partial<Pick<RoutineItem, 'enabled' | 'schedule'>>) {
+    const r = this.routines.find((x) => x.id === id);
+    if (r) Object.assign(r, patch, { next_run_at: null });
+  }
+
+  content: ContentItem[] = [
+    {
+      id: 'ci1',
+      platform: 'x',
+      week_of: '2026-10-12',
+      topic: 'Gece gelen mesajlar',
+      body: 'Gece 23:00 gelen mesaj sabaha kalırsa müşteri rakibe gider.',
+      status: 'approved',
+      posted_at: null,
+    },
+    {
+      id: 'ci2',
+      platform: 'linkedin',
+      week_of: '2026-10-12',
+      topic: 'Refleks',
+      body: 'Personel değil, refleks kuruyoruz.',
+      status: 'awaiting_approval',
+      posted_at: null,
+    },
+  ];
+  async listContent() {
+    return this.content;
+  }
+  async markContentPosted(id: string) {
+    const c = this.content.find((x) => x.id === id);
+    if (c && c.status === 'approved') {
+      c.status = 'posted';
+      c.posted_at = '2026-10-13T10:00:00Z';
+    }
+  }
+
+  metricsCalls: MetricsFilter[] = [];
+  async metrics(f: MetricsFilter): Promise<MetricsSummary> {
+    this.metricsCalls.push(f);
+    const k = f.playbook === 'all' ? 1 : 0.5;
+    return {
+      funnel: {
+        contacted: 120 * k,
+        replied: 18 * k,
+        positive: 9 * k,
+        meetings: 4 * k,
+        proposals: 3 * k,
+        won: 1 * k,
+      },
+      firstReplyHours: 13,
+      mrrKurus: 2_167_500,
+      targetKurus: 10_000_000,
+      pipelineKurus: 4_000_000,
+      clients: {
+        active: 1,
+        avgMonthlyKurus: 2_167_500,
+        cancelled: 0,
+        renewals: [{ company_name: 'Örnek Diş Kliniği', contract_end: '2026-11-20' }],
+      },
+      health: {
+        quota: [{ bucket: 'gemini', used: 40, rpd: 250 }],
+        queued: 3,
+        dead: 1,
+        errors24h: 2,
+        oldestApprovalAt: '2026-10-12T08:00:00Z',
+      },
+      playbooks: ['soguk_ana', 'sinyal'],
+    };
+  }
+
+  mapRows: MapCompany[] = [
+    {
+      id: 'm1',
+      name: 'Uzak Otel',
+      lat: 39.7,
+      lng: 27.95,
+      score: 55,
+      stage: 'analyzed',
+      city: 'Balıkesir',
+      address: 'Uzak Cd. 9',
+      phone_e164: null,
+    },
+    {
+      id: 'c1',
+      name: 'Örnek Diş Kliniği',
+      lat: 39.65,
+      lng: 27.89,
+      score: 78,
+      stage: 'in_playbook',
+      city: 'Balıkesir',
+      address: 'Anafartalar Cd. 1',
+      phone_e164: '902661234567',
+    },
+    {
+      id: 'm3',
+      name: 'Soğuk Galeri',
+      lat: 39.6,
+      lng: 27.8,
+      score: 20,
+      stage: 'waitlist',
+      city: 'Balıkesir',
+      address: null,
+      phone_e164: null,
+    },
+  ];
+  async mapCompanies() {
+    return { companies: this.mapRows, home: { lat: 39.6484, lng: 27.8826 } };
   }
 }

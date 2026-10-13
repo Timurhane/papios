@@ -1,4 +1,14 @@
-import type { FounderDiscount, FounderTerms, ProjectPart, Settings, VatMode } from '@papi/core';
+import type {
+  FounderDiscount,
+  FounderTerms,
+  FunnelCounts,
+  ProjectPart,
+  RoutineAction,
+  RoutineSchedule,
+  RoutineSpec,
+  Settings,
+  VatMode,
+} from '@papi/core';
 
 export type Stage =
   | 'new'
@@ -328,7 +338,81 @@ export type WorkerAction =
   | 'meeting.schedule'
   | 'meeting.note'
   | 'meeting.brief'
-  | 'demo.create';
+  | 'demo.create'
+  | 'routine.parse'
+  | 'routine.save';
+
+// --- Phase 6 ---
+
+export interface RoutineItem {
+  id: string;
+  code: string;
+  name: string;
+  action: RoutineAction;
+  schedule: RoutineSchedule;
+  params: Record<string, unknown>;
+  enabled: boolean;
+  source: 'preset' | 'telegram' | 'panel';
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_result: string | null;
+}
+
+export interface RoutineParseResult {
+  spec: RoutineSpec | null;
+  description?: string;
+}
+
+export interface ContentItem {
+  id: string;
+  platform: 'linkedin' | 'x' | 'instagram';
+  week_of: string;
+  topic: string;
+  body: string;
+  status: 'awaiting_approval' | 'approved' | 'posted' | 'rejected';
+  posted_at: string | null;
+}
+
+export interface MetricsFilter {
+  days: number;
+  playbook: string | 'all';
+  channel: Channel | 'all';
+}
+
+export interface MetricsSummary {
+  funnel: FunnelCounts;
+  /** Median hours from the first sent touch to the first reply, per company in the period. */
+  firstReplyHours: number | null;
+  mrrKurus: number;
+  targetKurus: number | null;
+  pipelineKurus: number;
+  clients: {
+    active: number;
+    avgMonthlyKurus: number;
+    cancelled: number;
+    renewals: { company_name: string; contract_end: string }[];
+  };
+  health: {
+    quota: { bucket: string; used: number; rpd: number | null }[];
+    queued: number;
+    dead: number;
+    errors24h: number;
+    oldestApprovalAt: string | null;
+  };
+  playbooks: string[];
+}
+
+export interface MapCompany {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  score: number | null;
+  stage: Stage;
+  city: string | null;
+  address: string | null;
+  phone_e164: string | null;
+}
 
 /** Data access used by the panel. Supabase-backed in the app, faked in tests. */
 export interface PanelApi {
@@ -386,4 +470,16 @@ export interface PanelApi {
   addFinanceEntry(e: Omit<FinanceEntry, 'id'>): Promise<void>;
   listNotes(query: string): Promise<NoteItem[]>;
   addNote(body: string, tags: string[]): Promise<void>;
+
+  // --- Intelligence and automation (Phase 6) ---
+  listRoutines(): Promise<RoutineItem[]>;
+  /** A schedule change clears next_run_at; the Worker's tick schedules the next run. */
+  updateRoutine(
+    id: string,
+    patch: Partial<Pick<RoutineItem, 'enabled' | 'schedule'>>,
+  ): Promise<void>;
+  listContent(): Promise<ContentItem[]>;
+  markContentPosted(id: string): Promise<void>;
+  metrics(filter: MetricsFilter): Promise<MetricsSummary>;
+  mapCompanies(): Promise<{ companies: MapCompany[]; home: { lat: number; lng: number } }>;
 }

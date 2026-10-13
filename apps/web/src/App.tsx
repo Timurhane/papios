@@ -15,6 +15,11 @@ import { ModulesPage } from '@/ops/ModulesPage';
 import { NotesPage } from '@/ops/NotesPage';
 import { ProjectPage } from '@/ops/ProjectPage';
 import { ProjectsPage } from '@/ops/ProjectsPage';
+import { ContentPage } from '@/intel/ContentPage';
+import { MapPage } from '@/intel/MapPage';
+import { MetricsPage } from '@/intel/MetricsPage';
+import { PrintPage } from '@/intel/PrintPage';
+import { RoutinesPage } from '@/intel/RoutinesPage';
 import { TodayPage } from '@/today/TodayPage';
 import { ModulePlaceholder } from '@/pages/ModulePlaceholder';
 import { NotFound } from '@/pages/NotFound';
@@ -30,6 +35,10 @@ const IMPLEMENTED = new Set([
   '/finans',
   '/notlar',
   '/teslim-modulleri',
+  '/harita',
+  '/rutinler',
+  '/icerik',
+  '/olcutler',
 ]);
 
 export function App() {
@@ -51,6 +60,11 @@ export function App() {
           <Route path="/finans" element={<FinancePage />} />
           <Route path="/notlar" element={<NotesPage />} />
           <Route path="/teslim-modulleri" element={<ModulesPage />} />
+          <Route path="/harita" element={<MapPage />} />
+          <Route path="/harita/yazdir" element={<PrintPage />} />
+          <Route path="/rutinler" element={<RoutinesPage />} />
+          <Route path="/icerik" element={<ContentPage />} />
+          <Route path="/olcutler" element={<MetricsPage />} />
           {panelModules
             .filter((m) => !IMPLEMENTED.has(m.path))
             .map((m) => (

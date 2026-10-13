@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  firstReplyHours,
   localDate,
   mrr,
   type FounderTerms,
@@ -7,6 +8,11 @@ import {
   type SubscriptionTerms,
 } from '@papi/core';
 import type {
+  ContentItem,
+  MapCompany,
+  MetricsFilter,
+  MetricsSummary,
+  RoutineItem,
   FinanceEntry,
   FinanceSummary,
   NoteItem,
@@ -58,7 +64,8 @@ const DEMO_COLUMNS = 'id, company_id, token, status, expires_at, visits, message
 const PROJECT_LIST =
   'id, name, company_id, package_code, status, started_on, contract_end, payment_path, monthly_kurus, setup_fee_kurus, project_kurus, satisfaction';
 const PAYMENT_LIST = 'id, company_id, kind, amount_kurus, due_on, status, paid_on, payment_link';
-const today = () => localDate(new Date(), 'Europe/Istanbul');
+const TZ = 'Europe/Istanbul';
+const today = () => localDate(new Date(), TZ);
 const MEETING_COLUMNS = 'id, company_id, status, starts_at, notes';
 
 type ProposalRowDb = Omit<ProposalSummary, 'company_name'>;
@@ -587,6 +594,233 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
       must(
         await db.from('notes').insert({ tenant_id: await tenant(), body, tags, source: 'panel' }),
       );
+    },
+
+    // --- Phase 6 ---
+
+    async listRoutines() {
+      return must(
+        await db
+          .from('routines')
+          .select(
+            'id, code, name, action, schedule, params, enabled, source, next_run_at, last_run_at, last_result',
+          )
+          .order('created_at'),
+      ) as RoutineItem[];
+    },
+
+    async updateRoutine(id, patch) {
+      must(
+        await db
+          .from('routines')
+          .update(patch.schedule || patch.enabled ? { ...patch, next_run_at: null } : patch)
+          .eq('id', id),
+      );
+    },
+
+    async listContent() {
+      return must(
+        await db
+          .from('content_items')
+          .select('id, platform, week_of, topic, body, status, posted_at')
+          .neq('status', 'rejected')
+          .order('week_of', { ascending: false })
+          .order('platform')
+          .limit(60),
+      ) as ContentItem[];
+    },
+
+    async markContentPosted(id) {
+      must(
+        await db
+          .from('content_items')
+          .update({ status: 'posted', posted_at: new Date().toISOString() })
+          .eq('id', id)
+          .eq('status', 'approved'),
+      );
+    },
+
+    async metrics(f: MetricsFilter): Promise<MetricsSummary> {
+      const since = new Date(Date.now() - f.days * 86_400_000).toISOString();
+      const day = new Date(Date.now() - 86_400_000).toISOString();
+      const playbooks = (
+        must(await db.from('playbooks').select('code').order('code')) as { code: string }[]
+      ).map((p) => p.code);
+      let ids: string[] | null = null;
+      if (f.playbook !== 'all') {
+        ids = (
+          must(
+            await db.from('companies').select('id').eq('assigned_playbook', f.playbook).limit(500),
+          ) as { id: string }[]
+        ).map((c) => c.id);
+      }
+      const head = { count: 'exact' as const, head: true };
+      /** Company (playbook) and channel scope for the funnel queries. */
+      const scoped = (table: string, cols: string, counted: boolean, channel = true) => {
+        let q = db.from(table).select(cols, counted ? head : undefined);
+        if (ids)
+          q = q.in('company_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
+        if (channel && f.channel !== 'all') q = q.eq('channel', f.channel);
+        return q;
+      };
+      const count = async (
+        q: PromiseLike<{ count: number | null; error: { message: string } | null }>,
+      ) => {
+        const { count: n, error } = await q;
+        if (error) throw new Error(error.message);
+        return n ?? 0;
+      };
+      const [sentRows, replyRows, positive, meetings, proposals, won, pipeline, subs] =
+        await Promise.all([
+          scoped('touches', 'company_id, sent_at', false)
+            .eq('status', 'sent')
+            .gte('sent_at', since)
+            .limit(5000),
+          scoped('inbox_messages', 'company_id, received_at', false)
+            .neq('classification', 'auto_reply')
+            .gte('received_at', since)
+            .limit(5000),
+          count(
+            scoped('inbox_messages', 'id', true)
+              .in('classification', ['interested', 'question'])
+              .gte('received_at', since),
+          ),
+          count(
+            scoped('meetings', 'id', true, false)
+              .in('status', ['scheduled', 'done'])
+              .gte('created_at', since),
+          ),
+          count(scoped('proposals', 'id', true, false).gte('sent_at', since)),
+          count(
+            scoped('proposals', 'id', true, false)
+              .eq('status', 'accepted')
+              .gte('decided_at', since),
+          ),
+          db.from('proposals').select('monthly_kurus, quote').in('status', ['approved', 'sent']),
+          db
+            .from('subscriptions')
+            .select(
+              'monthly_kurus, discounted_monthly_kurus, discount_months, started_on, commitment_months, day_of_month, status',
+            )
+            .eq('status', 'active'),
+        ]);
+      const [cancelled, renewals, settings, quota, queued, dead, errors, oldest] =
+        await Promise.all([
+          count(
+            db
+              .from('subscriptions')
+              .select('id', head)
+              .eq('status', 'cancelled')
+              .gte('cancelled_on', since.slice(0, 10)),
+          ),
+          db
+            .from('projects')
+            .select('company_id, contract_end')
+            .in('status', ['setup', 'active'])
+            .lte('contract_end', localDate(new Date(Date.now() + 45 * 86_400_000), TZ))
+            .order('contract_end')
+            .limit(20),
+          db.from('settings').select('key, value').in('key', ['revenue_target', 'llm']),
+          db
+            .from('quota_usage')
+            .select('provider, count')
+            .eq('window_kind', 'day')
+            .gte('window_start', day),
+          count(db.from('jobs').select('id', head).eq('status', 'queued')),
+          count(db.from('jobs').select('id', head).eq('status', 'dead')),
+          count(db.from('error_events').select('id', head).gte('created_at', day)),
+          db
+            .from('approvals')
+            .select('created_at')
+            .eq('status', 'pending')
+            .order('created_at')
+            .limit(1)
+            .maybeSingle(),
+        ]);
+      const sent = must(sentRows) as unknown as { company_id: string; sent_at: string }[];
+      const replies = must(replyRows) as unknown as {
+        company_id: string | null;
+        received_at: string;
+      }[];
+      const subRows = (must(subs) as SubscriptionTerms[]).map(nums);
+      const monthly = mrr(subRows, today());
+      const cfg = new Map(
+        (must(settings) as { key: string; value: Record<string, unknown> }[]).map((r) => [
+          r.key,
+          r.value,
+        ]),
+      );
+      const quotas = (cfg.get('llm')?.quotas ?? {}) as Record<string, { rpd?: number | null }>;
+      const used = new Map<string, number>();
+      for (const r of must(quota) as { provider: string; count: number }[])
+        used.set(r.provider, Math.max(used.get(r.provider) ?? 0, r.count));
+      return {
+        funnel: {
+          contacted: sent.length,
+          replied: replies.length,
+          positive,
+          meetings,
+          proposals,
+          won,
+        },
+        firstReplyHours: firstReplyHours(
+          sent.map((x) => ({ company_id: x.company_id, at: x.sent_at })),
+          replies
+            .filter((r): r is { company_id: string; received_at: string } => !!r.company_id)
+            .map((r) => ({ company_id: r.company_id, at: r.received_at })),
+        ),
+        mrrKurus: monthly,
+        targetKurus:
+          (cfg.get('revenue_target') as { monthly_kurus?: number | null } | undefined)
+            ?.monthly_kurus ?? null,
+        pipelineKurus: (
+          must(pipeline) as {
+            monthly_kurus: number | string | null;
+            quote: { project?: { projectKurus?: number } } | null;
+          }[]
+        ).reduce(
+          (n, r) =>
+            n + (r.monthly_kurus ? Number(r.monthly_kurus) : (r.quote?.project?.projectKurus ?? 0)),
+          0,
+        ),
+        clients: {
+          active: subRows.length,
+          avgMonthlyKurus: subRows.length ? Math.round(monthly / subRows.length) : 0,
+          cancelled,
+          renewals: await withCompanyNames(
+            db,
+            must(renewals) as { company_id: string; contract_end: string }[],
+          ),
+        },
+        health: {
+          quota: [...used].map(([bucket, n]) => ({
+            bucket,
+            used: n,
+            rpd: quotas[bucket]?.rpd ?? null,
+          })),
+          queued,
+          dead,
+          errors24h: errors,
+          oldestApprovalAt: (must(oldest) as { created_at: string } | null)?.created_at ?? null,
+        },
+        playbooks,
+      };
+    },
+
+    async mapCompanies() {
+      const [rows, intel] = await Promise.all([
+        db
+          .from('companies')
+          .select('id, name, lat, lng, score, stage, city, address, phone_e164')
+          .not('lat', 'is', null)
+          .not('stage', 'in', '(lost,closed)')
+          .order('score', { ascending: false })
+          .limit(1000),
+        db.from('settings').select('value').eq('key', 'intelligence').maybeSingle(),
+      ]);
+      const home = (must(intel) as { value: { home?: { lat: number; lng: number } } } | null)?.value
+        .home ?? { lat: 39.6484, lng: 27.8826 };
+      return { companies: must(rows) as MapCompany[], home };
     },
 
     async today(): Promise<TodaySummary> {

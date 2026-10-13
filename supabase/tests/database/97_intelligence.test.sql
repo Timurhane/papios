@@ -1,7 +1,7 @@
 -- Phase 6: routine allowlist, seeded presets, signal de-duplication, internal geocode cache.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(8);
 
 select is((select count(*)::int from public.routines where tenant_id = '00000000-0000-4000-8000-00000000a1a0'), 10,
   'ten preset routines are seeded');
@@ -30,6 +30,12 @@ insert into public.notes (tenant_id, company_id, body, source) values
   ('00000000-0000-4000-8000-00000000a1a0', '00000000-0000-4000-8000-0000000c0002', 'müşteri notu', 'panel');
 select is((select array_agg(body) from app.notes_to_embed('00000000-0000-4000-8000-00000000a1a0', 10)),
   array['aday notu'], 'notes on won clients are never embedded');
+
+update public.companies set lat = 39.6, lng = 27.9, geocoded_at = now()
+  where id = '00000000-0000-4000-8000-0000000c0001';
+update public.companies set address = 'Yeni adres 2' where id = '00000000-0000-4000-8000-0000000c0001';
+select ok((select geocoded_at is null and lat is null from public.companies
+  where id = '00000000-0000-4000-8000-0000000c0001'), 'a changed address is geocoded again');
 
 set local role authenticated;
 select throws_ok($$ select * from app.geocode_cache $$, '42501', null, 'geocode cache is internal');

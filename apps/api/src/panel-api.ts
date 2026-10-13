@@ -2,7 +2,10 @@ import {
   closeProposal,
   createDemo,
   demoUrl,
+  describeRoutine,
   draftProposal,
+  parseRoutineRequest,
+  saveRoutine,
   formatSlot,
   markProposalSent,
   meetingBrief,
@@ -14,6 +17,7 @@ import {
   type Repo,
   type SalesDeps,
 } from '@papi/server';
+import { validateRoutine } from '@papi/core';
 import { z } from 'zod';
 
 /**
@@ -42,6 +46,8 @@ export const panelActions = {
   'meeting.note': z.object({ companyId: uuid, text: z.string().min(3).max(20_000) }),
   'meeting.brief': z.object({ companyId: uuid }),
   'demo.create': z.object({ companyId: uuid }),
+  'routine.parse': z.object({ text: z.string().min(3).max(500) }),
+  'routine.save': z.object({ spec: z.record(z.string(), z.unknown()) }),
 } as const;
 export type PanelAction = keyof typeof panelActions;
 
@@ -136,6 +142,18 @@ export async function runPanelAction(
         throw new PanelError('Demo linki için PUBLIC_API_URL ayarlanmamış', 503);
       const d = await createDemo(deps, b.companyId);
       return { url: demoUrl(deps.publicApiUrl, d.token), expiresAt: d.expiresAt, reused: d.reused };
+    }
+    // K-13.5: the model only extracts structure; the panel shows it and Timurhan confirms.
+    case 'routine.parse': {
+      const b = panelActions[action].parse(raw);
+      const spec = await parseRoutineRequest(deps, b.text);
+      return spec ? { spec, description: describeRoutine(spec) } : { spec: null };
+    }
+    case 'routine.save': {
+      const b = panelActions[action].parse(raw);
+      const spec = validateRoutine(b.spec);
+      if (!spec) throw new PanelError('Rutin izinli eylemlerden birine uymuyor');
+      return { id: await saveRoutine(deps, spec, 'panel') };
     }
   }
 }

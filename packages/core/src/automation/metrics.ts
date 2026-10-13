@@ -39,3 +39,30 @@ export function median(values: number[]): number | null {
   const mid = Math.floor(v.length / 2);
   return v.length % 2 ? (v[mid] as number) : ((v[mid - 1] as number) + (v[mid] as number)) / 2;
 }
+
+/**
+ * K-16.1 first reply time: per company, hours from its first sent touch to its first reply after it;
+ * the median over companies that replied (null when none did).
+ */
+export function firstReplyHours(
+  sent: { company_id: string; at: string }[],
+  replies: { company_id: string; at: string }[],
+): number | null {
+  const first = new Map<string, number>();
+  for (const s of sent) {
+    const t = Date.parse(s.at);
+    if (!first.has(s.company_id) || t < (first.get(s.company_id) as number))
+      first.set(s.company_id, t);
+  }
+  const hours = new Map<string, number>();
+  for (const r of replies) {
+    const start = first.get(r.company_id);
+    const t = Date.parse(r.at);
+    if (start === undefined || t < start) continue;
+    const h = (t - start) / 3_600_000;
+    if (!hours.has(r.company_id) || h < (hours.get(r.company_id) as number))
+      hours.set(r.company_id, h);
+  }
+  const m = median([...hours.values()]);
+  return m === null ? null : Math.round(m * 10) / 10;
+}

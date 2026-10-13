@@ -1,8 +1,10 @@
+import { DisabledCalendar } from '@papi/server';
 import { describe, expect, it } from 'vitest';
 import { handleUpdate } from './bot.ts';
 import { runCron } from './cron.ts';
 import type { AppDeps } from './deps.ts';
 import { notify } from './notify.ts';
+import { runPanelAction } from './panel-api.ts';
 import { callbackUpdate, OWNER, setup, textUpdate } from './test/fakes.ts';
 
 function appDeps(ctx: ReturnType<typeof setup>): AppDeps {
@@ -118,5 +120,30 @@ describe('Phase 6 acceptance', () => {
     expect(ctx.tg.texts().at(-1)).toContain('çeviremedim');
     await handleUpdate(callbackUpdate(OWNER, 'rt:ok'), ctx.deps);
     expect(await ctx.repo.listRoutines()).toHaveLength(0);
+  });
+});
+
+describe('panel routine actions', () => {
+  it('routine.parse shows the structure; routine.save validates and stores it', async () => {
+    const ctx = setup([
+      JSON.stringify({
+        name: 'Açık teklifler',
+        action: 'pipeline_digest',
+        schedule: { kind: 'weekdays', time: '08:30' },
+        params: {},
+      }),
+    ]);
+    const deps = { repo: ctx.repo, llm: ctx.llm, calendar: new DisabledCalendar() };
+    const parsed = await runPanelAction(deps, 'routine.parse', {
+      text: 'hafta içi 8:30 teklifler',
+    });
+    expect(parsed.description).toContain('Açık teklifler');
+    const saved = await runPanelAction(deps, 'routine.save', { spec: parsed.spec });
+    expect((await ctx.repo.listRoutines())[0]).toMatchObject({ id: saved.id, source: 'panel' });
+    await expect(
+      runPanelAction(deps, 'routine.save', {
+        spec: { name: 'x y', action: 'run_sql', schedule: { kind: 'daily', time: '09:00' } },
+      }),
+    ).rejects.toThrow('izinli');
   });
 });

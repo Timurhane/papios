@@ -2238,7 +2238,7 @@ export class SupabaseRepo implements Repo {
         .from('companies')
         .select(COMPANY_COLUMNS)
         .eq('tenant_id', this.tenantId)
-        .is('lat', null)
+        .is('geocoded_at', null)
         .not('address', 'is', null)
         .limit(limit),
       'companies to geocode',
@@ -2249,7 +2249,7 @@ export class SupabaseRepo implements Repo {
     must(
       await this.db
         .from('companies')
-        .update({ lat, lng })
+        .update({ lat, lng, geocoded_at: new Date().toISOString() })
         .eq('tenant_id', this.tenantId)
         .eq('id', id),
       'set location',
