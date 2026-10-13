@@ -235,6 +235,15 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
   Yapay zeka müşterinin kendi anahtarıyla; müşterinin müşterilerinin mesajları kişisel veri olduğundan ücretli
   (eğitimde kullanılmayan) katman önerilir ve README/teklifte yazılır.
 
+## Faz 6 kararları (2026-10-13, Timurhan onayı)
+
+- **K-8.11** (D-1) Sinyal kaynakları: (a) yüksek puanlı firmaların sitesi haftada bir yeniden taranır, değişiklik
+  (randevu/WhatsApp/sohbet eklenmesi-kaldırılması, yeni şube, kampanya ya da iş ilanı sayfası) sinyal olur;
+  (b) haftada en fazla 20 firma için Gemini aramasıyla haber taraması; (c) OSM'de ilgili sektörlerde yeni açılan
+  işletmeler haftalık. Instagram bağlanırsa paylaşım sıklığı eklenir.
+- **K-3.18** (D-2) Harita konumu: adresi olan firmalar OpenStreetMap Nominatim ile (saniyede 1 istek, sonuç saklanır,
+  atıf gösterilir) GitHub Actions'ta toplu konumlandırılır.
+
 ## Açık kararlar (Timurhan onayı bekliyor)
 
 | #   | Konu                                                           | Ne zaman gerekli                              |

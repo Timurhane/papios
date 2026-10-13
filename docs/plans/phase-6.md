@@ -1,6 +1,6 @@
 # Faz 6 planı — Zeka ve otomasyon
 
-Durum: **Onay bekliyor.**
+Durum: **Uygulanıyor** (Timurhan onayladı; D-1 → K-8.11, D-2 → K-3.18).
 Kabul: `/uyuyorum` sonrası gece vardiyası çalışıyor, `/uyandim` ile özet geliyor; rutinler zamanında çalışıyor.
 
 ## Adımlar
