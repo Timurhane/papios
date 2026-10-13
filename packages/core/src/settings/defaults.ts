@@ -104,7 +104,22 @@ export const defaultSettings: Settings = {
   },
   telegram: { voice_replies: false, approvals_per_message: 8 },
   // K-15.5
-  night_shift: { auto_window: null, urgent_as_silent: true },
+  night_shift: {
+    auto_window: null,
+    urgent_as_silent: true,
+    // V-67
+    areas: ['Balıkesir'],
+    sectors: ['clinic', 'real_estate', 'auto', 'hotel', 'education', 'construction'],
+    max_searches_per_night: 2,
+    max_drafts_per_night: 10,
+  },
+  // K-8.11, K-10.7 (V-67)
+  intelligence: {
+    signal_min_score: 60,
+    competitors: [],
+    news_sectors: ['klinik', 'emlak', 'otel', 'oto galeri'],
+    home: { lat: 39.6484, lng: 27.8826 },
+  },
   // K-15.4
   notifications: {
     hot_reply: true,

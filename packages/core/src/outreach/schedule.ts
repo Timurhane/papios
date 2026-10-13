@@ -2,7 +2,7 @@ import type { Settings } from '../settings/schema.ts';
 
 type Hours = Settings['business_hours'];
 
-interface LocalParts {
+export interface LocalParts {
   y: number;
   m: number;
   d: number;
@@ -11,6 +11,11 @@ interface LocalParts {
 }
 
 const WEEKDAY: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+
+/** Local calendar parts of `date` in `timeZone` (weekday ISO 1..7, minutes since midnight). */
+export function localParts(date: Date, timeZone: string): LocalParts {
+  return parts(date, timeZone);
+}
 
 function parts(date: Date, timeZone: string): LocalParts {
   const f = new Intl.DateTimeFormat('en-US', {
@@ -51,7 +56,7 @@ function offsetMs(date: Date, timeZone: string): number {
 }
 
 /** The UTC instant of local wall time y-m-d hh:mm in `timeZone`. */
-function zoned(y: number, m: number, d: number, minutes: number, timeZone: string): Date {
+export function zoned(y: number, m: number, d: number, minutes: number, timeZone: string): Date {
   const guess = new Date(Date.UTC(y, m - 1, d, Math.floor(minutes / 60), minutes % 60));
   return new Date(guess.getTime() - offsetMs(guess, timeZone));
 }

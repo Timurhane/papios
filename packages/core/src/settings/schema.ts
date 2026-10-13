@@ -104,6 +104,31 @@ export const settingsSchemas = {
     auto_window: z.object({ start: hhmm, end: hhmm }).nullable(),
     /** In quiet mode, deliver urgent alerts as silent Telegram notifications. */
     urgent_as_silent: z.boolean(),
+    /** K-15.5 night work: where to look for new leads and how much to do per night (quota budget). */
+    areas: z.array(z.string().min(1)).max(10),
+    sectors: z.array(
+      z.enum([
+        'clinic',
+        'real_estate',
+        'auto',
+        'hotel',
+        'education',
+        'construction',
+        'manufacturing',
+      ]),
+    ),
+    max_searches_per_night: z.number().int().min(0).max(10),
+    max_drafts_per_night: z.number().int().min(0).max(50),
+  }),
+  intelligence: z.object({
+    /** Companies at or above this score get the weekly site rescan (K-8.11). */
+    signal_min_score: z.number().int().min(0).max(100),
+    /** AJNA's competitors (names or sites) for the weekly competitor scan. */
+    competitors: z.array(z.string().min(1)).max(20),
+    /** Sectors for the weekly news-based opportunity search. */
+    news_sectors: z.array(z.string().min(1)).max(10),
+    /** Start point of the visit route (K-10.7). */
+    home: z.object({ lat: z.number(), lng: z.number() }).nullable(),
   }),
   notifications: z.object({
     hot_reply: z.boolean(),

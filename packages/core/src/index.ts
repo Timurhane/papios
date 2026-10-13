@@ -25,3 +25,8 @@ export * from './outreach/guard.ts';
 export * from './sales/pricing.ts';
 export * from './sales/redact.ts';
 export * from './finance/finance.ts';
+export * from './automation/routines.ts';
+export * from './automation/signals.ts';
+export * from './automation/route.ts';
+export * from './automation/learning.ts';
+export * from './automation/metrics.ts';
