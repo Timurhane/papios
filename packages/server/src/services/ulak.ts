@@ -33,6 +33,7 @@ import type {
   Repo,
   TouchRow,
 } from '../repo/types.ts';
+import { createDemo, demoUrl } from './demo.ts';
 import type { InboundMail, MailTransport } from './mail.ts';
 
 export interface OutreachDeps {
@@ -204,14 +205,8 @@ async function createStepTouch(
     channel: step.channel,
     recipient,
   };
-  if (step.channel === 'demo') {
-    await deps.repo.createTouch({
-      ...base,
-      status: 'skipped',
-      skip_reason: 'Kişiye özel demo Faz 4’te geliyor',
-    });
-    return 'skipped';
-  }
+  if (step.channel === 'demo')
+    return demoStepTouch(deps, settings, pb, company, step, base, batchId);
   if (step.approval_exempt_kind === 'analysis_tool_report') {
     await deps.repo.createTouch({
       ...base,
@@ -268,6 +263,81 @@ async function createStepTouch(
       touchId,
       warnings: draft.warnings,
       draftKind: `outreach_${step.channel}`,
+    },
+    batchId,
+    agent: 'ulak',
+  });
+  await deps.repo.updateTouch(touchId, { approval_id: approvalId });
+  return 'drafts';
+}
+
+/**
+ * K-13.7 demo step (Soğuk Ana G7): a 14-day personal demo is created and its link is delivered by
+ * e-mail (or WhatsApp one-click when there is no address). The message still needs approval (K-2.1).
+ */
+async function demoStepTouch(
+  deps: OutreachDeps,
+  settings: Settings,
+  pb: PlaybookWithSteps,
+  company: CompanyRow,
+  step: PlaybookStep,
+  base: {
+    company_id: string;
+    enrollment_id: string;
+    step_position: number;
+    recipient: string | null;
+  },
+  batchId: string | null,
+): Promise<keyof AdvanceResult> {
+  const email = company.emails[0] ?? null;
+  const via: Channel | null = email ? 'email' : company.phone_e164 ? 'whatsapp' : null;
+  if (!via) {
+    await deps.repo.createTouch({
+      ...base,
+      channel: 'demo',
+      status: 'skipped',
+      skip_reason: 'Demo linkini iletecek e-posta veya telefon yok',
+    });
+    return 'skipped';
+  }
+  const demo = await createDemo({ repo: deps.repo, now: deps.now }, company.id);
+  const url = demoUrl(deps.publicApiUrl, demo.token);
+  const draft = await writeDraft(
+    deps,
+    settings,
+    company,
+    {
+      ...step,
+      channel: via,
+      angle: `${step.angle}: işletmeye özel 14 günlük mesaj asistanı demosu hazırladık; denemeye davet et. Linki yazma, kod ekler.`,
+    },
+    pb,
+    false,
+  );
+  const signature = settings.outreach.signature;
+  const linkLine = `Demonuz (14 gün açık): ${url}`;
+  const text = draft.text.endsWith(signature)
+    ? `${draft.text.slice(0, -signature.length).trimEnd()}\n\n${linkLine}\n\n${signature}`
+    : `${draft.text}\n\n${linkLine}`;
+  const touchId = await deps.repo.createTouch({
+    ...base,
+    channel: via,
+    recipient: via === 'email' ? email : company.phone_e164,
+    status: 'awaiting_approval',
+    subject: draft.subject,
+    body: text,
+  });
+  const approvalId = await deps.repo.createApproval({
+    kind: 'outreach',
+    title: `Demo (${CHANNEL_LABEL[via]}): ${company.name} (${pb.name} ${step.position}. adım)`,
+    payload: {
+      text,
+      subject: draft.subject,
+      personal: draft.personal,
+      channel: via,
+      touchId,
+      warnings: draft.warnings,
+      draftKind: `outreach_${via}`,
     },
     batchId,
     agent: 'ulak',

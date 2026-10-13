@@ -291,10 +291,16 @@ describe('sequence mechanics', () => {
       '1:email:sent',
       '2:whatsapp:skipped',
       '3:instagram_dm:skipped',
-      '4:demo:skipped',
-      '5:phone_call:skipped',
+      // K-13.7: the demo step creates a 14-day demo and drafts an e-mail with its link
+      '4:email:awaiting_approval',
     ]);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+    const demoMail = repo.touches[3]!;
+    expect(demoMail.body).toMatch(
+      /Demonuz \(14 gün açık\): https:\/\/api\.papi\.test\/demo\/[\w-]{43}\n\nTimurhan/,
+    );
+    expect(repo.demos).toHaveLength(1);
+    expect(repo.approvals.at(-1)?.title).toMatch(/^Demo \(E-posta\)/);
   });
 
   it('one-click items: approve → ready → "Gönderdim" → sent', async () => {

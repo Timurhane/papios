@@ -323,6 +323,19 @@ export function proposalText(
       `Kurulumlu: kurulum ${formatTl(q.setup.setupFeeKurus)} + aylık ${formatTl(q.setup.monthlyKurus)}${disc(q.setup)}, ${q.setup.commitmentMonths} ay taahhüt — ${vat}`,
     );
   }
+  const proj = p.quote as {
+    kind?: string;
+    parts?: { title: string; days: number }[];
+    project?: { projectKurus: number; maintenanceMinKurus: number; maintenanceMaxKurus: number };
+  };
+  if (proj.kind === 'project' && proj.project && proj.parts) {
+    lines.push(
+      '',
+      ...proj.parts.map((x) => `${x.title}: ${x.days} gün`),
+      `Proje bedeli: ${formatTl(proj.project.projectKurus)} — ${vat}`,
+      `Bakım: ${formatTl(proj.project.maintenanceMinKurus)}–${formatTl(proj.project.maintenanceMaxKurus)} / ay`,
+    );
+  }
   if (p.founder_discount)
     lines.push('', 'Kurucu müşteri indirimi uygulandı (kontenjan gerçekten açık).');
   return lines.join('\n').trim();

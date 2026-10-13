@@ -215,3 +215,41 @@ describe('reply drafts', () => {
     expect(repo.meetings[0]?.status).toBe('proposed');
   });
 });
+
+describe('proposalText', () => {
+  it('shows a custom project breakdown', async () => {
+    const { proposalText } = await import('./satici.ts');
+    const text = proposalText(
+      {
+        id: 'p',
+        company_id: 'c',
+        meeting_id: null,
+        number: 'AJNA-2026-0009',
+        status: 'draft',
+        package_code: 'ozel',
+        monthly_kurus: null,
+        quote: {
+          kind: 'project',
+          parts: [{ title: 'ERP entegrasyonu', days: 6 }],
+          project: {
+            projectKurus: 7_200_000,
+            maintenanceMinKurus: 576_000,
+            maintenanceMaxKurus: 720_000,
+          },
+        },
+        founder_discount: null,
+        vat_mode: 'included',
+        valid_until: '2026-10-27',
+        intro: 'Giriş',
+        scope: ['Madde'],
+        approval_id: null,
+        pdf_path: null,
+        sent_at: null,
+      },
+      null,
+      'Örnek',
+    );
+    expect(text).toContain('ERP entegrasyonu: 6 gün');
+    expect(text).toContain('Proje bedeli: ₺72.000 — KDV dahil');
+  });
+});
