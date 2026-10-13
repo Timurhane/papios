@@ -234,4 +234,19 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-4** `docs/` belgeleri Türkçe yazılır (kural K-0.5 yalnızca arayüz/kod/commit dilini belirliyor).
 - **V-5** Para tutarları veritabanında TL kuruş cinsinden tam sayı (`bigint`) saklanır.
 - **V-6** Paket ve fiyat seed'leri talimattaki değerlerle; Operasyon saat sınırı ve Özel paket günlük ücret alanları boş (NULL) bırakılır.
-- **V-7** Supabase ücretsiz projeler belli süre hareketsizlikte duraklatılabildiği için (Faz 0'da doğrulanacak) Worker cron'unun düzenli DB erişimi projeyi aktif tutar; ayrıca gerekirse Actions'ta hafif bir "keep-alive" işi eklenir.
+- **V-7** Supabase ücretsiz projeler belli süre hareketsizlikte duraklatılabildiği için (doğrulandı: 1 hafta, bkz. free-tier-limits.md) Worker cron'unun düzenli DB erişimi projeyi aktif tutar; ayrıca gerekirse Actions'ta hafif bir "keep-alive" işi eklenir.
+- **V-8** Gömme vektörleri 768 boyutlu saklanır (Gemini embedding çıktı boyutu ayarlanabilir; pgvector HNSW indeksi 2.000 boyuta kadar destekler). Faz 1'de modelle doğrulanacak.
+- **V-9** `audit_log` kişisel veri taşımaz, yalnızca kimlik (id) taşır; böylece KVKK silmesi değiştirilemez kaydı bozmaz.
+- **V-10** Reddedenler listesi ham değeri değil, normalize edilmiş değerin SHA-256 özetini saklar; kişi KVKK kapsamında silinse bile engel sürer.
+- **V-11** Mail ısınma eğrisi: günde 20 ile başla, her 7 günde +5, en çok 50; gönderimler arası rastgele 4–15 dk. Ayarlardan değişir.
+- **V-12** Analiz aracı günlük toplam limit varsayılanı 20.
+- **V-13** Soğuk Ana için talimatta "8 temas" yazıyor ama 7 adım listelenmiş; listelenen 7 adım seed edildi. **8. temas ne olsun?**
+- **V-14** Hafif Soğuk adımları: G1 mail, G4 WhatsApp, G8 Instagram DM, G14 kapanış maili.
+- **V-15** Sinyal adımları: G1 mail, G3 WhatsApp, G5 Instagram DM, G7 telefon, G10 kapanış maili.
+- **V-16** Teklif Takibi kanalları: G2 mail (soru), G5 WhatsApp (örnek), G10 mail (kurucu kontenjanı, yalnızca gerçekse), G20 mail (son takip).
+- **V-17** Uyandırma: G0 mail, G4 WhatsApp, G10 mail. Ortaklar referans dizisi (`referans_ortak`): G1 mail, G5 WhatsApp, G14 mail. Ziyaret Sonrası G5 takibi mail.
+- **V-18** Telefon ve ziyaret adımları Timurhan'ın kendi görevleri olduğu için onay kuyruğuna girmez (Papi bir şey göndermiyor). Veritabanı kısıtı: onaysız adım yalnızca telefon/ziyaret veya analiz raporu olabilir.
+- **V-19** Bilgi bankası panelde ayrı menü değil, Ayarlar altında (K-13.2 listesine sadık kalındı). Müşteri portalı menüde yok (kapalı bayrak).
+- **V-20** RLS politikaları ayrı `supabase/policies/` klasörü yerine tabloyla aynı migration dosyasında durur (Supabase CLI yalnızca `migrations/` uygular; tablo ve politikası birlikte okunur). Yapı değişikliği K-3.14 gereği bildirilir.
+- **V-21** Panel, Cloudflare Pages'in Git entegrasyonuyla yayınlanır (build Cloudflare'de olur, GitHub Actions dakikası harcamaz).
+- **V-22** Canlı veritabanına migration, yalnızca elle tetiklenen `DB deploy` iş akışıyla uygulanır.

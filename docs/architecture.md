@@ -52,12 +52,12 @@ Node'a özel kod `apps/jobs` içinde kalır.
 Tüm tablolarda `id uuid`, `tenant_id uuid not null`, `created_at`, `updated_at`. RLS politikası:
 `tenant_id = (select app.current_tenant_id())` — kiracı, JWT'deki kullanıcının `tenant_members` kaydından çözülür.
 
-Faz 0'da kurulacak temel tablolar:
+Faz 0'da kurulan tablolar (migration'lar: `supabase/migrations/`, RLS politikaları tabloyla aynı dosyada — V-20):
 
 - `tenants`, `tenant_members` (kullanıcı ↔ kiracı, rol)
 - `settings` (anahtar/değer, JSON; tüm ayarlanabilir değerler)
 - `feature_flags` (ör. `client_portal = false`)
-- `packages` (paket ve fiyatlar), `founder_discount` sayacı
+- `service_packages` (paket ve fiyatlar), `founder_discount` sayacı
 - `playbooks`, `playbook_steps`
 - `audit_log` (yalnızca ekleme; UPDATE/DELETE trigger ile engellenir)
 - `suppression_list` (global reddedenler; kiracı bazlı ama tüm kanalları kapsar)
@@ -118,3 +118,37 @@ Her giden mesaj tek bir `outbound.guard()` fonksiyonundan geçer:
 | Canlı | Supabase ücretsiz proje              | Workers        | Pages  |
 
 Not: Ücretsiz Supabase'de ayrı staging projesi açılabilir (proje sayısı limiti doğrulanacak); başlangıçta yalnızca canlı + yerel.
+
+## 9. Veritabanı yardımcıları (Faz 0)
+
+| Fonksiyon                                   | Amaç                                                                                                                                   | Kim çağırır                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `app.can_access_tenant(tenant_id)`          | RLS'in ortak koşulu: üyelik **ve** `aal2`                                                                                              | politikalar                          |
+| `app.audit_row_change()`                    | Ayar/yapılandırma tablolarındaki her değişikliği `audit_log`'a yazar. Ajanlar `set local app.actor = 'agent:ulak'` ile kendini tanıtır | trigger                              |
+| `app.normalize_contact`, `app.contact_hash` | Telefon/e-posta/alan adı normalize + SHA-256                                                                                           | sunucu, testler                      |
+| `app.suppress`, `app.is_suppressed`         | Global reddedenler listesi                                                                                                             | guard katmanı (Faz 3)                |
+| `app.claim_jobs(worker, heavy, limit)`      | `for update skip locked` ile iş kapma                                                                                                  | yalnızca `service_role`              |
+| `app.attach_owner(slug, email)`             | Davet edilen kullanıcıyı kiracıya sahip olarak bağlar                                                                                  | yalnızca `service_role` / SQL Editor |
+
+Ayar anahtarları ve biçimleri tek kaynaktan gelir: `packages/core/src/settings/schema.ts` (Zod) +
+`defaults.ts`. `pnpm gen:seed` → `supabase/seed/20_settings.sql`; güncel olmadığı testte yakalanır.
+
+## 10. Test katmanları
+
+| Katman            | Araç                              | Nerede                                                                                                                  |
+| ----------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Birim + bileşen   | Vitest (+ Testing Library, jsdom) | `pnpm test`, CI                                                                                                         |
+| Veritabanı / RLS  | pgTAP                             | CI'da gerçek Supabase (`supabase test db`); yerelde Docker yoksa düz Postgres + Supabase taklidi (`pnpm test:db:local`) |
+| Panel duman testi | Playwright (masaüstü + mobil)     | CI                                                                                                                      |
+
+## 11. Yayın
+
+- **Panel:** Cloudflare Pages Git entegrasyonu (V-21). Güvenlik başlıkları `apps/web/public/_headers`.
+- **Veritabanı:** elle tetiklenen `DB deploy` iş akışı (`supabase db push --include-seed`; seed idempotent) (V-22).
+- **Worker:** Faz 1'de (cron + Telegram webhook ile birlikte).
+
+## 12. Ücretsiz katmanın tasarıma etkisi
+
+- Workers: cron çağrısı başına 10 ms CPU ve 50 alt istek → dağıtıcı tik başına sınırlı iş alır; ağır iş Actions'ta.
+- Workers: hesap başına 5 cron → tek "her dakika" dağıtıcı + birkaç zamanlanmış tetikleyici; rutinler kuyruk üzerinden.
+- Supabase: 1 hafta hareketsizlikte duraklatma → dakikalık cron projeyi canlı tutar; yedek yok → gece `pg_dump`.

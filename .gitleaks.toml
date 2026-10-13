@@ -20,6 +20,12 @@ description = "Groq API key"
 regex = '''\bgsk_[A-Za-z0-9]{48,}\b'''
 keywords = ["gsk_"]
 
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key"
+regex = '''\bsb_secret_[A-Za-z0-9_-]{20,}\b'''
+keywords = ["sb_secret_"]
+
 [allowlist]
 description = "Example env file holds placeholders only"
 paths = ['''\.env\.example$''']

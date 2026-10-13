@@ -5,16 +5,18 @@ Durum: ⬜ yapılmadı · ✅ tamam. Kaynak: talimat Bölüm 18.
 
 ## Faz 0 — Temel
 
-- [ ] Monorepo (pnpm workspaces), TypeScript, ESLint, Prettier, Vitest
-- [ ] CI: GitHub Actions'ta lint + typecheck + test + RLS testleri
-- [ ] Gizli bilgi taraması (gitleaks, pre-commit + CI)
-- [ ] Hesap ve anahtar kontrol listesi (Supabase, Cloudflare, GitHub, Gemini AI Studio, Groq, Telegram BotFather, Meta, Natro)
-- [ ] `docs/free-tier-limits.md` (resmi kaynak linkli)
-- [ ] Supabase şeması: multi-tenant, RLS, migration
-- [ ] Seed: AJNA kiracısı, paketler, playbook seti, varsayılan ayarlar, marka bilgisi
-- [ ] Panel iskeleti (Türkçe, siyah + mor-mavi tema, mobil) + giriş + zorunlu TOTP
-- [ ] Worker iskeleti (Hono, sağlık ucu)
-- [ ] **Kabul:** Giriş çalışıyor · RLS testleri başka kiracı verisinin okunamadığını kanıtlıyor · CI yeşil
+- [x] Monorepo (pnpm workspaces), TypeScript, ESLint, Prettier, Vitest
+- [x] CI: GitHub Actions'ta lint + typecheck + test + RLS testleri
+- [x] Gizli bilgi taraması (gitleaks, pre-commit + CI)
+- [x] Hesap ve anahtar kontrol listesi yazıldı (`docs/setup/accounts.md`)
+- [ ] Faz 0 hesapları açıldı: Supabase, GitHub secrets, panel kullanıcısı, Cloudflare Pages
+- [ ] Canlıda giriş + TOTP denendi
+- [x] `docs/free-tier-limits.md` (resmi kaynak linkli)
+- [x] Supabase şeması: multi-tenant, RLS, migration
+- [x] Seed: AJNA kiracısı, paketler, playbook seti, varsayılan ayarlar, marka bilgisi
+- [x] Panel iskeleti (Türkçe, siyah + mor-mavi tema, mobil) + giriş + zorunlu TOTP
+- [x] Worker iskeleti (Hono, sağlık ucu)
+- [ ] **Kabul:** Giriş çalışıyor (yerelde testli; canlı bekliyor) · ✅ RLS testleri başka kiracı verisinin okunamadığını kanıtlıyor · ✅ CI yeşil
 
 ## Faz 1 — Beyin ve Telegram
 

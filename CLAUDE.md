@@ -60,14 +60,13 @@ packages/
   prompts/    # ajan ve görev promptları (versiyonlu)
   modules/    # müşteriye teslim edilen otomasyon modülü şablonları
 supabase/
-  migrations/ seed/ policies/ tests/
+  migrations/ seed/ tests/   # RLS politikaları migration içinde (V-20)
+scripts/      # yerel yardımcılar (test-db-local.sh)
 docs/
 .github/workflows/
 ```
 
 ## Komutlar
-
-> Faz 0 tamamlanınca geçerli olur.
 
 ```bash
 pnpm install              # bağımlılıklar
@@ -75,7 +74,10 @@ pnpm lint                 # ESLint (tüm workspace)
 pnpm format               # Prettier yaz / pnpm format:check
 pnpm typecheck            # tsc --noEmit (tüm workspace)
 pnpm test                 # Vitest (birim testleri)
-pnpm test:db              # Supabase yerel + RLS/pgTAP testleri (Docker gerekir)
+pnpm test:db              # pgTAP/RLS testleri, çalışan yerel Supabase'e karşı (Docker)
+pnpm test:db:local        # aynı testler, Docker'sız: düz Postgres + Supabase taklidi
+pnpm gen:seed             # ayar seed'ini packages/core defaults'tan üret
+pnpm --filter @papi/web e2e  # Playwright duman testi
 pnpm --filter web dev     # panel geliştirme sunucusu
 pnpm --filter api dev     # wrangler dev
 supabase db reset         # migration + seed'i yerelde baştan uygula
