@@ -10,3 +10,4 @@ export interface Prompt {
 
 export { papiSystem } from './papi/system.ts';
 export { approvalRevise } from './papi/approval-revise.ts';
+export { analistSummary } from './analist/summary.ts';
