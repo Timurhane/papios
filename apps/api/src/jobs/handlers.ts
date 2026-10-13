@@ -138,6 +138,13 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
           supersedes: old.id,
         });
         await repo.decideApproval(old.id, 'superseded');
+        // An outreach draft keeps its touch: point it at the new approval and text.
+        if (typeof old.payload.touchId === 'string') {
+          await repo.updateTouch(old.payload.touchId, {
+            approval_id: newId,
+            body: revised.text.trim(),
+          });
+        }
         await repo.addStyleMemory({
           draftKind: old.kind,
           original,

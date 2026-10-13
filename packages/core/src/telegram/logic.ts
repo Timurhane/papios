@@ -118,6 +118,17 @@ export interface ApprovalItem {
   preview: string;
 }
 
+/** One-click queue / task buttons: "tk:<touchId>:ok" (Gönderdim / Aradım) or ":no" (Atla). */
+export function encodeTouchCallback(touchId: string, op: 'ok' | 'no'): string {
+  return `tk:${touchId}:${op}`;
+}
+
+export function decodeTouchCallback(data: string): { touchId: string; op: 'ok' | 'no' } | null {
+  const [prefix, id, op] = data.split(':');
+  if (prefix !== 'tk' || !id || !UUID.test(id) || (op !== 'ok' && op !== 'no')) return null;
+  return { touchId: id, op };
+}
+
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

@@ -99,7 +99,7 @@ describe.skipIf(!url || !key)('SupabaseRepo against real Supabase', () => {
       agent: 'it',
       supersedes: a,
     });
-    expect(await r.decideBatch(batch, 'approved')).toBe(1);
+    expect(await r.decideBatch(batch, 'approved')).toEqual([b]);
     expect((await r.getApproval(b))?.status).toBe('approved');
     await r.addStyleMemory({
       draftKind: 'cold_email',

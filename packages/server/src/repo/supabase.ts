@@ -321,7 +321,7 @@ export class SupabaseRepo implements Repo {
         .select('id'),
       'decide batch',
     ) as { id: string }[];
-    return rows.length;
+    return rows.map((r) => r.id);
   }
 
   async addStyleMemory(input: {

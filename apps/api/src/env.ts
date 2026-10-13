@@ -28,6 +28,10 @@ export const envSchema = z.object({
     .optional(),
   /** Optional fine-grained GitHub token (actions:write) to start the heavy-jobs workflow immediately. */
   GITHUB_DISPATCH_TOKEN: optionalSecret,
+  /** Public base URL of this Worker (unsubscribe links, K-10.13). */
+  PUBLIC_API_URL: z.url().optional(),
+  /** Secret (>= 32 chars) for signed public tokens: unsubscribe and demo links (K-17.4). */
+  PUBLIC_TOKEN_SECRET: z.string().min(32).optional(),
   GITHUB_REPOSITORY: z
     .string()
     .regex(/^[\w.-]+\/[\w.-]+$/)

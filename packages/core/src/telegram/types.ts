@@ -35,8 +35,5 @@ export interface TgUpdate {
   edited_message?: TgMessage;
   callback_query?: TgCallbackQuery;
 }
-export interface InlineButton {
-  text: string;
-  callback_data: string;
-}
+export type InlineButton = { text: string; callback_data: string } | { text: string; url: string };
 export type InlineKeyboard = InlineButton[][];

@@ -8,7 +8,13 @@ import {
   type ProviderId,
 } from '@papi/core';
 import type { ConfiguredEnv } from './env.ts';
-import { InstagramDiscovery, SupabaseRepo } from '@papi/server';
+import {
+  DisabledMailTransport,
+  InstagramDiscovery,
+  SupabaseRepo,
+  type OutreachDeps,
+} from '@papi/server';
+import { notify } from './notify.ts';
 import type { Repo } from '@papi/server';
 import { TelegramClient, type TelegramApi } from '@papi/server';
 
@@ -22,6 +28,8 @@ export interface AppDeps {
   panelUrl?: string;
   /** Starts the heavy-jobs workflow on GitHub Actions; absent when no dispatch token is configured. */
   dispatchHeavy?: () => Promise<void>;
+  /** Outreach (Phase 3); absent until PUBLIC_API_URL and PUBLIC_TOKEN_SECRET are set. */
+  outreach?: OutreachDeps;
 }
 
 /** Composition root: one set of dependencies per request or cron tick. */
@@ -50,14 +58,30 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
           env.IG_GRAPH_VERSION,
         )
       : null;
+  const tg = new TelegramClient(env.TELEGRAM_BOT_TOKEN);
+  const outreach: OutreachDeps | undefined =
+    env.PUBLIC_API_URL && env.PUBLIC_TOKEN_SECRET
+      ? {
+          repo,
+          llm,
+          // Mail account connection follows decision A-1; until then nothing is sent or read.
+          mail: new DisabledMailTransport(),
+          publicApiUrl: env.PUBLIC_API_URL,
+          tokenSecret: env.PUBLIC_TOKEN_SECRET,
+          notify: async (kind, text) => {
+            await notify({ repo, tg, ownerChatId: env.TELEGRAM_OWNER_ID }, kind, text);
+          },
+        }
+      : undefined;
   const token = env.GITHUB_DISPATCH_TOKEN;
   const repoName = env.GITHUB_REPOSITORY;
   return {
     repo,
     llm,
-    tg: new TelegramClient(env.TELEGRAM_BOT_TOKEN),
+    tg,
     ownerId: env.TELEGRAM_OWNER_ID,
     instagram,
+    ...(outreach ? { outreach } : {}),
     pageSpeedKey: env.PAGESPEED_API_KEY,
     panelUrl: env.PANEL_URL,
     ...(token && repoName ? { dispatchHeavy: () => dispatchWorkflow(token, repoName) } : {}),

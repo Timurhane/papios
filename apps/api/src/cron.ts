@@ -2,6 +2,7 @@ import { dispatch } from '@papi/core';
 import type { AppDeps } from './deps.ts';
 import { buildRegistry, scheduledJobs } from './jobs/handlers.ts';
 import { notify } from './notify.ts';
+import { runOutreachStep } from './outreach.ts';
 
 /** Light jobs per tick: each may use several subrequests (Workers free: 50 per invocation). */
 const JOBS_PER_TICK = 1;
@@ -20,7 +21,7 @@ export async function runCron(deps: AppDeps, now: Date): Promise<void> {
   };
   for (const job of scheduledJobs(now))
     await deps.repo.enqueue(job.type, job.payload, { unique: true });
-  await dispatch({
+  const r = await dispatch({
     store: deps.repo.queueStore,
     registry: buildRegistry(jobDeps),
     worker: 'worker-cron',
@@ -35,6 +36,21 @@ export async function runCron(deps: AppDeps, now: Date): Promise<void> {
       await notify(jobDeps, 'system_error', `⚠️ Bir iş kalıcı olarak başarısız oldu: ${job.type}`);
     },
   });
+  // Outreach runs only when no job used this invocation's budget (Workers: 50 subrequests).
+  if (r.done + r.retried + r.dead === 0 && deps.outreach) {
+    try {
+      await runOutreachStep(
+        { repo: deps.repo, tg: deps.tg, ownerChatId: deps.ownerId, outreach: deps.outreach },
+        now,
+      );
+    } catch (err) {
+      await deps.repo.recordError(
+        'outreach',
+        'error',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
   await kickHeavyWorker(deps, now);
 }
 

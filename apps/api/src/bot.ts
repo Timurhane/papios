@@ -2,6 +2,7 @@ import {
   chunk,
   classifyUpdate,
   decodeApprovalCallback,
+  decodeTouchCallback,
   formatApprovalGroup,
   isOwner,
   QuotaExhaustedError,
@@ -16,14 +17,22 @@ import { papiSystem } from '@papi/prompts';
 import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
-import type { ApprovalRow, Repo } from '@papi/server';
-import type { TelegramApi } from '@papi/server';
+import {
+  completeOneClick,
+  onApprovalDecided,
+  type ApprovalRow,
+  type OutreachDeps,
+  type Repo,
+  type TelegramApi,
+} from '@papi/server';
 
 export interface BotDeps {
   repo: Repo;
   llm: LLMService;
   tg: TelegramApi;
   ownerId: number;
+  /** Outreach (Phase 3); absent until the public URL and token secret are configured. */
+  outreach?: OutreachDeps;
 }
 
 const HISTORY_MESSAGES = 10;
@@ -318,6 +327,11 @@ function previewOf(a: ApprovalRow): string {
 // --- approvals ---------------------------------------------------------------------------------
 
 async function handleCallback(callbackId: string, data: string, chatId: number, deps: BotDeps) {
+  const touchCb = decodeTouchCallback(data);
+  if (touchCb) {
+    await handleTouchCallback(callbackId, touchCb, chatId, deps);
+    return;
+  }
   const cb = decodeApprovalCallback(data);
   if (!cb) {
     await deps.tg.answerCallback(callbackId, 'Geçersiz işlem');
@@ -326,10 +340,13 @@ async function handleCallback(callbackId: string, data: string, chatId: number, 
 
   if (cb.scope === 'batch') {
     const status = cb.op === 'ok' ? 'approved' : 'rejected';
-    const n = await deps.repo.decideBatch(cb.id, status);
+    const ids = await deps.repo.decideBatch(cb.id, status);
+    for (const id of ids) await afterDecision(id, status, deps);
     await deps.tg.answerCallback(
       callbackId,
-      n ? `${n} iş ${status === 'approved' ? 'onaylandı' : 'reddedildi'}` : 'Bekleyen iş kalmamış',
+      ids.length
+        ? `${ids.length} iş ${status === 'approved' ? 'onaylandı' : 'reddedildi'}`
+        : 'Bekleyen iş kalmamış',
     );
     return;
   }
@@ -352,18 +369,64 @@ async function handleCallback(callbackId: string, data: string, chatId: number, 
 
   const status = cb.op === 'ok' ? 'approved' : 'rejected';
   if (await deps.repo.decideApproval(approval.id, status)) {
-    await deps.repo.addStyleMemory({
-      draftKind: approval.kind,
-      original: previewOf(approval),
-      revised: null,
-      instruction: null,
-      verdict: status === 'approved' ? 'approved' : 'rejected',
-    });
+    await afterDecision(approval.id, status, deps, approval);
   }
   await deps.tg.answerCallback(
     callbackId,
     status === 'approved' ? 'Onaylandı ✅' : 'Reddedildi ❌',
   );
+}
+
+/** Style memory + (for outreach) scheduling of the approved touch. */
+async function afterDecision(
+  approvalId: string,
+  status: 'approved' | 'rejected',
+  deps: BotDeps,
+  known?: ApprovalRow,
+) {
+  const approval = known ?? (await deps.repo.getApproval(approvalId));
+  if (!approval) return;
+  await deps.repo.addStyleMemory({
+    draftKind: styleKind(approval),
+    original: personalPart(approval),
+    revised: null,
+    instruction: null,
+    verdict: status === 'approved' ? 'approved' : 'rejected',
+  });
+  if (approval.kind === 'outreach' && deps.outreach)
+    await onApprovalDecided(deps.outreach, approval.id, status);
+}
+
+/** Style memory keeps only the model-written part: greetings with names never reach a prompt (K-4.7). */
+function personalPart(a: ApprovalRow): string {
+  return typeof a.payload.personal === 'string' ? a.payload.personal : previewOf(a);
+}
+
+function styleKind(a: ApprovalRow): string {
+  return typeof a.payload.draftKind === 'string' ? a.payload.draftKind : a.kind;
+}
+
+async function handleTouchCallback(
+  callbackId: string,
+  cb: { touchId: string; op: 'ok' | 'no' },
+  chatId: number,
+  deps: BotDeps,
+) {
+  if (!deps.outreach) {
+    await deps.tg.answerCallback(callbackId, 'Henüz hazır değil');
+    return;
+  }
+  const touch = await completeOneClick(deps.outreach, cb.touchId, cb.op === 'ok' ? 'sent' : 'skip');
+  await deps.tg.answerCallback(
+    callbackId,
+    touch ? (cb.op === 'ok' ? 'Kaydedildi ✅' : 'Atlandı') : 'Bu iş artık beklemiyor',
+  );
+  if (touch?.channel === 'phone_call' && cb.op === 'ok') {
+    await deps.tg.sendMessage(
+      chatId,
+      'Görüşme nasıl geçti? Sesli not atarsan firmanın hafızasına eklerim.',
+    );
+  }
 }
 
 async function applyCorrection(
@@ -379,8 +442,8 @@ async function applyCorrection(
     return;
   }
   await deps.repo.addStyleMemory({
-    draftKind: approval.kind,
-    original: previewOf(approval),
+    draftKind: styleKind(approval),
+    original: personalPart(approval),
     revised: null,
     instruction,
     verdict: 'edited',

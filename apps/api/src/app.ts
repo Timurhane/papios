@@ -3,6 +3,12 @@ import { Hono } from 'hono';
 import { handleUpdate } from './bot.ts';
 import type { AppDeps } from './deps.ts';
 import { isConfigured, missingSecrets, parseEnv, type ConfiguredEnv } from './env.ts';
+import {
+  applyUnsubscribe,
+  unsubscribeConfirmPage,
+  unsubscribeDonePage,
+  unsubscribeInvalidPage,
+} from './unsubscribe.ts';
 
 export type AppBindings = { Bindings: Record<string, unknown> };
 
@@ -56,6 +62,18 @@ export function createApp(opts: AppOptions = {}) {
     if (ctx) ctx.waitUntil(work.catch((err) => console.error('telegram turn failed', err)));
     else await work;
     return c.json({ ok: true });
+  });
+
+  // K-10.13 unsubscribe link: public, signed token, no access to anything else (K-17.4).
+  app.get('/u/:token', (c) => c.html(unsubscribeConfirmPage()));
+  app.post('/u/:token', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env) || !env.PUBLIC_TOKEN_SECRET)
+      return c.html(unsubscribeInvalidPage(), 503);
+    const build = opts.buildDeps ?? (await import('./deps.ts')).buildDeps;
+    const deps = await build(env);
+    const ok = await applyUnsubscribe(deps.repo, env.PUBLIC_TOKEN_SECRET, c.req.param('token'));
+    return ok ? c.html(unsubscribeDonePage()) : c.html(unsubscribeInvalidPage(), 404);
   });
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));

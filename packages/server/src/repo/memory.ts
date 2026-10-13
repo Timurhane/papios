@@ -269,7 +269,7 @@ export class MemoryRepo implements Repo {
   async decideBatch(batchId: string, status: 'approved' | 'rejected') {
     const items = this.approvals.filter((a) => a.batch_id === batchId && a.status === 'pending');
     items.forEach((a) => (a.status = status));
-    return items.length;
+    return items.map((a) => a.id);
   }
   async addStyleMemory(input: unknown) {
     this.styleMemory.push(input);
@@ -415,7 +415,14 @@ export class MemoryRepo implements Repo {
   }
   async addContact(
     companyId: string,
-    c: { full_name?: string | null; email?: string | null; source: string },
+    c: {
+      full_name?: string | null;
+      role?: string | null;
+      email?: string | null;
+      phone_e164?: string | null;
+      is_decision_maker?: boolean;
+      source: string;
+    },
   ) {
     this.contacts.push({ companyId, ...c });
   }

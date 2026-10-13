@@ -199,7 +199,7 @@ export interface Repo {
     status: 'approved' | 'rejected' | 'needs_revision' | 'superseded',
     correction?: string,
   ): Promise<boolean>;
-  decideBatch(batchId: string, status: 'approved' | 'rejected'): Promise<number>;
+  decideBatch(batchId: string, status: 'approved' | 'rejected'): Promise<string[]>;
   addStyleMemory(input: {
     draftKind: string;
     original: string;
