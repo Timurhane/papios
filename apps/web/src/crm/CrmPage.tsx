@@ -125,6 +125,7 @@ function CompanyList({ companies }: { companies: CompanySummary[] }) {
               <p className="truncate text-xs text-muted">
                 {[c.sector, c.city].filter(Boolean).join(' · ') || '—'}
               </p>
+              <p className="truncate text-xs text-violet/90 sm:hidden">{nextStepText(c)}</p>
             </div>
             <div className="hidden text-right text-xs sm:block">
               <p>{STAGE_LABEL[c.stage]}</p>

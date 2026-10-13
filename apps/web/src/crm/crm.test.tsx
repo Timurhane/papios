@@ -30,7 +30,7 @@ describe('CRM list and kanban', () => {
     const list = await screen.findByRole('list', { name: 'Firmalar' });
     expect(within(list).getByText('Örnek Diş Kliniği')).toBeInTheDocument();
     expect(within(list).getByLabelText('Puan 78')).toBeInTheDocument();
-    expect(within(list).getByText('Playbook: Soğuk Ana')).toBeInTheDocument();
+    expect(within(list).getAllByText('Playbook: Soğuk Ana').length).toBeGreaterThan(0);
   });
 
   it('filters by search', async () => {
