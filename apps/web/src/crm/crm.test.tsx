@@ -121,6 +121,21 @@ describe('company card', () => {
   });
 });
 
+describe('KVKK deletion (K-17.7)', () => {
+  it('asks for confirmation before deleting personal data', async () => {
+    const api = renderAt('/crm/c1');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Kişisel verileri sil (KVKK)' }),
+    );
+    expect(screen.getByText(/Geri alınamaz/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    expect(api.deleted).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Kişisel verileri sil (KVKK)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Evet, sil' }));
+    expect(api.deleted).toEqual(['c1']);
+  });
+});
+
 describe('Bugün', () => {
   it('shows approvals, fresh analyses and quota', async () => {
     renderAt('/');

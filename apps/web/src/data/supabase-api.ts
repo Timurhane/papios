@@ -807,6 +807,10 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
       };
     },
 
+    async deleteCompanyPersonalData(companyId) {
+      must(await db.schema('app').rpc('delete_company_personal_data', { p_company_id: companyId }));
+    },
+
     async mapCompanies() {
       const [rows, intel] = await Promise.all([
         db

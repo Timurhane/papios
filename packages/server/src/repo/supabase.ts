@@ -2355,6 +2355,13 @@ export class SupabaseRepo implements Repo {
     );
   }
 
+  async runRetention(months: number) {
+    return must(
+      await this.app().rpc('run_retention', { p_tenant_id: this.tenantId, p_months: months }),
+      'run retention',
+    ) as number;
+  }
+
   async toolRequestsSince(since: Date) {
     return this.countSince('tool_requests', 'created_at', since);
   }

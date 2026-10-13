@@ -161,6 +161,7 @@ function CompanyCard({ company: c, onChanged }: { company: CompanyDetail; onChan
               <li className="text-muted">İletişim bilgisi bulunamadı.</li>
             )}
           </ul>
+          <DeletePersonalData companyId={c.id} onDone={onChanged} />
         </Card>
 
         <Card className="flex flex-col gap-3">
@@ -179,6 +180,47 @@ function CompanyCard({ company: c, onChanged }: { company: CompanyDetail; onChan
         </Card>
       </div>
     </>
+  );
+}
+
+/** K-17.7: one-click deletion (with a confirmation step; cannot be undone). */
+function DeletePersonalData({ companyId, onDone }: { companyId: string; onDone: () => void }) {
+  const api = usePanelApi();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!confirming)
+    return (
+      <Button variant="ghost" size="sm" className="self-start" onClick={() => setConfirming(true)}>
+        Kişisel verileri sil (KVKK)
+      </Button>
+    );
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border p-3 text-sm">
+      <p>
+        Kişiler, e-posta ve telefonlar, mesaj içerikleri silinir; adresler reddedenler listesine
+        eklenir ve kayıt kapanır. Geri alınamaz.
+      </p>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={async () => {
+            try {
+              await api.deleteCompanyPersonalData(companyId);
+              setConfirming(false);
+              onDone();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            }
+          }}
+        >
+          Evet, sil
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+          Vazgeç
+        </Button>
+      </div>
+      <ErrorText>{error}</ErrorText>
+    </div>
   );
 }
 

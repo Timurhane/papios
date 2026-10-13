@@ -1351,6 +1351,11 @@ export class MemoryRepo implements Repo {
     const r = this.toolRequests.find((x) => x.id === id);
     if (r) Object.assign(r, patch);
   }
+  retentionRuns: number[] = [];
+  async runRetention(months: number) {
+    this.retentionRuns.push(months);
+    return 0;
+  }
   async toolRequestsSince(since: Date) {
     return this.toolRequests.filter((r) => Date.parse(r.created_at) >= since.getTime()).length;
   }

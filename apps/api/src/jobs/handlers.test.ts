@@ -53,6 +53,16 @@ describe('job handlers', () => {
       'llm.verify_models',
     ]);
     expect(scheduledJobs(new Date('2026-10-13T10:16:00Z'))).toEqual([]);
+    expect(scheduledJobs(new Date('2026-10-13T00:41:00Z')).map((j) => j.type)).toEqual([
+      'privacy.retention',
+    ]);
+  });
+
+  it('privacy.retention clears stale personal data with the configured months', async () => {
+    const ctx = setup();
+    await ctx.repo.enqueue('privacy.retention', {});
+    await run(ctx);
+    expect(ctx.repo.retentionRuns).toEqual([12]);
   });
 });
 

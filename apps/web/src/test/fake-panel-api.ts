@@ -712,6 +712,10 @@ export class FakePanelApi implements PanelApi {
       phone_e164: null,
     },
   ];
+  deleted: string[] = [];
+  async deleteCompanyPersonalData(companyId: string) {
+    this.deleted.push(companyId);
+  }
   async mapCompanies() {
     return { companies: this.mapRows, home: { lat: 39.6484, lng: 27.8826 } };
   }

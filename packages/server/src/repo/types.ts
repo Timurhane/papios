@@ -723,6 +723,8 @@ export interface Repo {
     patch: Partial<Pick<ToolRequestRow, 'status' | 'report' | 'mailed_at' | 'email'>>,
   ): Promise<void>;
   toolRequestsSince(since: Date): Promise<number>;
+  /** K-17.7: clears personal data of stale unwon companies; returns how many. */
+  runRetention(months: number): Promise<number>;
 }
 
 export interface ToolRequestRow {

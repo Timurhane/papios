@@ -485,4 +485,8 @@ export interface PanelApi {
   markContentPosted(id: string): Promise<void>;
   metrics(filter: MetricsFilter): Promise<MetricsSummary>;
   mapCompanies(): Promise<{ companies: MapCompany[]; home: { lat: number; lng: number } }>;
+
+  // --- Phase 7 ---
+  /** K-17.7 one-click deletion: personal data removed, addresses suppressed, record closed. */
+  deleteCompanyPersonalData(companyId: string): Promise<void>;
 }

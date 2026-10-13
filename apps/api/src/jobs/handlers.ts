@@ -201,6 +201,12 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
         );
         await deps.tg.sendMessage(deps.ownerChatId, text, { html: true, keyboard });
       })
+      // K-17.7: unwon leads' personal data is cleared after the retention period.
+      .register('privacy.retention', async () => {
+        const s = await repo.getSettings();
+        const n = await repo.runRetention(s.data_retention.unwon_personal_data_months);
+        await repo.audit('privacy.retention', { cleared: n }, { type: 'system', id: 'cron' });
+      })
       .register('llm.verify_models', async () => {
         const missing = await llm.findMissingModels();
         if (missing.length === 0) return;
@@ -221,6 +227,8 @@ export function scheduledJobs(now: Date): { type: string; payload: Record<string
   if (now.getUTCMinutes() % 15 === 0) out.push({ type: 'embed.missing', payload: {} });
   if (now.getUTCHours() === 3 && now.getUTCMinutes() === 7)
     out.push({ type: 'llm.verify_models', payload: {} });
+  if (now.getUTCHours() === 0 && now.getUTCMinutes() === 41)
+    out.push({ type: 'privacy.retention', payload: {} });
   // Charges, overdue alerts and client reports are routines since Phase 6 (payment_check, monthly_reports).
   return out;
 }

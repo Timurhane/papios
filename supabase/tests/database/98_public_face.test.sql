@@ -1,7 +1,7 @@
 -- Phase 7: analysis tool requests are internal (RLS); public pages reach them only through the Worker.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(14);
 
 insert into public.tool_requests (tenant_id, email, query, consent_at, consent_version, token_hash, expires_at)
 values ('00000000-0000-4000-8000-00000000a1a0', 'a@b.com', 'ornek.com', now(), '2026-10', 'h1', now() + interval '30 days');
@@ -43,6 +43,32 @@ select is(app.portal_project() ->> 'name', 'Portal Klinik — Sistem', 'with the
 select is(app.portal_project() -> 'tasks' -> 0 ->> 'title', 'Site kutusu kuruldu', 'and its checklist');
 set local request.jwt.claims to '{"sub":"00000000-0000-4000-8000-00000000dead","role":"authenticated","aal":"aal1"}';
 select is(app.portal_project(), null, 'an unlinked user gets nothing');
+reset role;
+
+-- K-17.7 retention and one-click deletion
+insert into public.companies (id, tenant_id, name, name_norm, source, stage, emails, phone_e164, waiting_reason, waiting_until, created_at)
+values ('00000000-0000-4000-8000-0000000c0e01', '00000000-0000-4000-8000-00000000a1a0', 'Eski Aday', 'eski aday', 'manual', 'waitlist',
+        '{eski@aday.com}', '905321112233', 'x', current_date, now() - interval '13 months'),
+       ('00000000-0000-4000-8000-0000000c0e02', '00000000-0000-4000-8000-00000000a1a0', 'Yeni Aday', 'yeni aday', 'manual', 'waitlist',
+        '{yeni@aday.com}', null, 'x', current_date, now() - interval '1 month');
+insert into public.contacts (tenant_id, company_id, full_name, email, source)
+values ('00000000-0000-4000-8000-00000000a1a0', '00000000-0000-4000-8000-0000000c0e01', 'Ali Veli', 'ali@aday.com', 'manual');
+
+select is(app.run_retention('00000000-0000-4000-8000-00000000a1a0', 12), 1, 'only the stale unwon company is cleared');
+select is((select count(*)::int from public.contacts where company_id = '00000000-0000-4000-8000-0000000c0e01'), 0,
+  'its contacts are deleted');
+select ok((select emails = '{}' and phone_e164 is null and name = 'Eski Aday' from public.companies
+  where id = '00000000-0000-4000-8000-0000000c0e01'), 'personal fields are cleared, the firm stays');
+select ok((select cardinality(emails) = 1 from public.companies where id = '00000000-0000-4000-8000-0000000c0e02'),
+  'a recent lead keeps its data');
+
+select app.clear_personal_data('00000000-0000-4000-8000-00000000a1a0', '00000000-0000-4000-8000-0000000c0e02', true, 'test');
+select ok(app.is_suppressed('00000000-0000-4000-8000-00000000a1a0', 'email', 'yeni@aday.com'),
+  'one-click deletion puts the address on the global suppression list');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-4000-8000-0000000c11e1","role":"authenticated","aal":"aal1"}';
+select throws_ok($$ select app.delete_company_personal_data('00000000-0000-4000-8000-0000000c0e01') $$, '42501', null,
+  'a non-member cannot delete data');
 reset role;
 
 select * from finish();
