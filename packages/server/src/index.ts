@@ -12,3 +12,4 @@ export * from './services/ulak.ts';
 export * from './services/satici.ts';
 export * from './services/calendar.ts';
 export * from './services/demo.ts';
+export * from './services/operator.ts';

@@ -1,4 +1,4 @@
-import { modulesFor, type DeliveryModule } from './catalog.ts';
+import { MODULES, modulesFor, type DeliveryModule } from './catalog.ts';
 import { clientConfigSchema, type ClientConfig } from './config.ts';
 import type { FormAnswers } from './form.ts';
 
@@ -96,10 +96,13 @@ function moduleLines(mods: DeliveryModule[]): string {
 }
 
 /** Claude Code setup prompt (Turkish, read by Timurhan and pasted into Claude Code). */
-export function buildClaudePrompt(config: ClientConfig, packageName: string): string {
-  const mods = modulesFor(config.modules.includes('google-yorum') ? 'sistem' : 'refleks').filter(
-    (m) => config.modules.includes(m.code),
-  );
+/** What the prompt needs; a full ClientConfig fits, and so does a provisional one before the form arrives. */
+export type PromptInput = Pick<ClientConfig, 'channels' | 'modules'> & {
+  client: Pick<ClientConfig['client'], 'name' | 'website'>;
+};
+
+export function buildClaudePrompt(config: PromptInput, packageName: string): string {
+  const mods = MODULES.filter((m) => config.modules.includes(m.code));
   const channels = [
     config.channels.web ? 'web sitesi sohbet kutusu' : null,
     config.channels.instagram ? 'Instagram DM' : null,

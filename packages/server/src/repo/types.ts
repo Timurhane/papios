@@ -250,6 +250,78 @@ export interface InboxRow extends InboxInput {
   id: string;
 }
 
+export interface ProjectRow {
+  id: string;
+  company_id: string;
+  proposal_id: string | null;
+  name: string;
+  package_code: string;
+  payment_path: 'no_setup' | 'setup' | 'project';
+  monthly_kurus: number | null;
+  setup_fee_kurus: number | null;
+  project_kurus: number | null;
+  status: 'setup' | 'active' | 'paused' | 'ended';
+  started_on: string;
+  contract_end: string | null;
+  satisfaction: 'positive' | 'negative' | null;
+  metrics_token: string;
+}
+
+export interface SetupFormRow {
+  id: string;
+  project_id: string;
+  token: string;
+  package_code: string;
+  answers: Record<string, unknown>;
+  status: 'sent' | 'submitted' | 'reviewed';
+  expires_at: string;
+}
+
+export interface SetupFormLookup {
+  result: 'ok' | 'not_found' | 'expired' | 'submitted';
+  formId: string | null;
+  projectId: string | null;
+  packageCode: string | null;
+  businessName: string | null;
+  expiresAt: string | null;
+}
+
+export interface SubscriptionRow {
+  id: string;
+  company_id: string;
+  project_id: string | null;
+  monthly_kurus: number;
+  discounted_monthly_kurus: number | null;
+  discount_months: number;
+  started_on: string;
+  commitment_months: number;
+  day_of_month: number;
+  status: 'active' | 'paused' | 'cancelled';
+}
+
+export interface PaymentRow {
+  id: string;
+  company_id: string;
+  subscription_id: string | null;
+  project_id: string | null;
+  kind: 'setup' | 'monthly' | 'project' | 'other';
+  amount_kurus: number;
+  due_on: string;
+  status: 'due' | 'paid' | 'cancelled';
+  paid_on: string | null;
+  overdue_notified_on: string | null;
+}
+
+export interface NoteRow {
+  id: string;
+  company_id: string | null;
+  project_id: string | null;
+  body: string;
+  tags: string[];
+  source: 'telegram_text' | 'telegram_voice' | 'panel';
+  created_at: string;
+}
+
 /** Everything the Worker reads or writes, scoped to one tenant. */
 export interface Repo {
   readonly tenantId: string;
@@ -447,4 +519,61 @@ export interface Repo {
   hitRateLimit(key: string, windowSeconds: number, max: number): Promise<boolean>;
   /** Panel → Worker calls: is this auth user a member of the tenant? */
   isMember(userId: string): Promise<boolean>;
+
+  // --- Operations (Phase 5) ---
+  createProject(
+    p: Omit<ProjectRow, 'id' | 'satisfaction' | 'status'> & { status?: ProjectRow['status'] },
+  ): Promise<string>;
+  getProject(id: string): Promise<ProjectRow | null>;
+  projectByProposal(proposalId: string): Promise<ProjectRow | null>;
+  projectByMetricsToken(token: string): Promise<ProjectRow | null>;
+  activeProjects(limit: number): Promise<ProjectRow[]>;
+  updateProject(id: string, patch: Partial<Omit<ProjectRow, 'id' | 'company_id'>>): Promise<void>;
+  /** Replaces the project's checklist (keeps items already ticked by title). */
+  replaceProjectTasks(
+    projectId: string,
+    items: { title: string; module: string | null }[],
+  ): Promise<void>;
+  projectTasks(
+    projectId: string,
+  ): Promise<{ title: string; module_code: string | null; done: boolean }[]>;
+  createSetupForm(f: {
+    project_id: string;
+    token: string;
+    package_code: string;
+    expires_at: string;
+  }): Promise<string>;
+  setupFormByProject(projectId: string): Promise<SetupFormRow | null>;
+  setupFormByToken(token: string): Promise<SetupFormLookup>;
+  submitSetupForm(token: string, answers: Record<string, unknown>): Promise<boolean>;
+  upsertArtifact(
+    projectId: string,
+    kind: 'config' | 'claude_prompt' | 'checklist',
+    content: string,
+  ): Promise<void>;
+  artifacts(projectId: string): Promise<{ kind: string; content: string }[]>;
+  createSubscription(s: Omit<SubscriptionRow, 'id' | 'status'>): Promise<string>;
+  activeSubscriptions(limit: number): Promise<SubscriptionRow[]>;
+  /** Inserts a charge unless the same subscription already has one on that date. */
+  ensurePayment(
+    p: Omit<PaymentRow, 'id' | 'status' | 'paid_on' | 'overdue_notified_on'>,
+  ): Promise<boolean>;
+  duePayments(limit: number): Promise<PaymentRow[]>;
+  markPayment(
+    id: string,
+    patch: Partial<Pick<PaymentRow, 'status' | 'paid_on' | 'overdue_notified_on'>>,
+  ): Promise<void>;
+  addNote(n: Omit<NoteRow, 'id' | 'created_at'>): Promise<string>;
+  recentNotes(limit: number, query?: string): Promise<NoteRow[]>;
+  upsertModuleMetrics(
+    projectId: string,
+    period: string,
+    metrics: Record<string, number>,
+  ): Promise<void>;
+  moduleMetrics(projectId: string, period: string): Promise<Record<string, number> | null>;
+  /** Facts used by playbook conditions (e.g. satisfaction_positive for Referans). */
+  companyFacts(companyId: string): Promise<Record<string, boolean>>;
+  setupContact(
+    projectId: string,
+  ): Promise<{ name: string | null; email: string | null; phone: string | null }>;
 }

@@ -23,6 +23,7 @@ import type {
   ServicePackage,
 } from '../repo/types.ts';
 import type { CalendarProvider } from './calendar.ts';
+import { onClientWon, type OpsDeps } from './operator.ts';
 import { greetingFor } from './ulak.ts';
 
 export interface SalesDeps {
@@ -30,6 +31,9 @@ export interface SalesDeps {
   llm: LLMService;
   calendar: CalendarProvider;
   now?: () => Date;
+  /** Public Worker URL (setup form links when a proposal is accepted, Phase 5). */
+  publicApiUrl?: string;
+  notify?: OpsDeps['notify'];
 }
 
 const now = (d: SalesDeps) => d.now?.() ?? new Date();
@@ -391,6 +395,7 @@ export async function closeProposal(
   deps: SalesDeps,
   proposalId: string,
   outcome: 'accepted' | 'rejected',
+  path: 'no_setup' | 'setup' | null = null,
 ): Promise<boolean> {
   const p = await deps.repo.getProposal(proposalId);
   if (!p) return false;
@@ -409,23 +414,26 @@ export async function closeProposal(
     p.company_id,
     `Teklif ${outcome === 'accepted' ? 'kabul' : 'ret'}`,
   );
-  const today = localDate(now(deps), 'Europe/Istanbul');
-  await deps.repo.updateCompany(
-    p.company_id,
-    outcome === 'accepted'
-      ? {
-          stage: 'won',
-          next_step_kind: 'waiting',
-          waiting_reason: 'Kazanıldı: kurulum formu ve proje (Faz 5)',
-          waiting_until: addDays(today, 1),
-        }
-      : {
-          stage: 'lost',
-          next_step_kind: 'waiting',
-          waiting_reason: 'Teklif reddedildi: 90 gün sonra yeniden değerlendir',
-          waiting_until: addDays(today, 90),
-        },
-  );
+  if (outcome === 'accepted') {
+    // Phase 5: Operatör opens the project, setup form, prompt, checklist and client sequences.
+    await onClientWon(
+      {
+        repo: deps.repo,
+        ...(deps.publicApiUrl ? { publicApiUrl: deps.publicApiUrl } : {}),
+        ...(deps.notify ? { notify: deps.notify } : {}),
+        ...(deps.now ? { now: deps.now } : {}),
+      },
+      p.id,
+      path,
+    );
+    return true;
+  }
+  await deps.repo.updateCompany(p.company_id, {
+    stage: 'lost',
+    next_step_kind: 'waiting',
+    waiting_reason: 'Teklif reddedildi: 90 gün sonra yeniden değerlendir',
+    waiting_until: addDays(localDate(now(deps), 'Europe/Istanbul'), 90),
+  });
   return true;
 }
 

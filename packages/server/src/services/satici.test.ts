@@ -147,7 +147,13 @@ describe('Phase 4 acceptance: meeting note → proposal draft', () => {
     const c = await repo.getCompany(id);
     expect(c?.stage).toBe('won');
     expect(c?.next_step_kind).toBe('waiting'); // K-2.6: never without a next step
-    expect(repo.enrollments.every((e) => e.status !== 'active')).toBe(true);
+    // sales sequences stop; client sequences (Müşteri Yaşamı, Referans) start (Phase 5)
+    expect(
+      repo.enrollments
+        .filter((e) => e.status === 'active')
+        .map((e) => e.playbook_id)
+        .sort(),
+    ).toEqual(['pb-musteri-yasami', 'pb-referans']);
   });
 
   it('a panel decision on a proposal approval is applied by the Worker', async () => {

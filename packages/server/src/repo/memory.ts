@@ -24,6 +24,12 @@ import type {
   InboxRow,
   KnowledgeHit,
   MeetingRow,
+  NoteRow,
+  PaymentRow,
+  ProjectRow,
+  SetupFormLookup,
+  SetupFormRow,
+  SubscriptionRow,
   NewCompany,
   PlaybookWithSteps,
   ProposalRow,
@@ -114,6 +120,43 @@ export const TEST_PLAYBOOKS: PlaybookWithSteps[] = [
     code: 'simdi_degil',
     name: 'Şimdi Değil',
     steps: [step({ position: 1, day_offset: 90, channel: 'email' })],
+  },
+  {
+    id: 'pb-musteri-yasami',
+    code: 'musteri_yasami',
+    name: 'Müşteri Yaşamı',
+    steps: [
+      step({ position: 1, day_offset: 7, channel: 'whatsapp', angle: '1. hafta kontrolü' }),
+      step({
+        position: 2,
+        day_offset: 30,
+        channel: 'email',
+        angle: 'Aylık rapor',
+        repeat_every_days: 30,
+      }),
+      step({
+        position: 3,
+        day_offset: -30,
+        anchor: 'contract_end',
+        channel: 'email',
+        angle: 'Yenileme',
+      }),
+    ],
+  },
+  {
+    id: 'pb-referans',
+    code: 'referans',
+    name: 'Referans',
+    steps: [
+      step({ position: 1, day_offset: 30, channel: 'whatsapp', angle: 'Memnuniyet sorusu' }),
+      step({
+        position: 2,
+        day_offset: 33,
+        channel: 'whatsapp',
+        angle: 'Referans isteği',
+        conditions: { only_if: 'satisfaction_positive' },
+      }),
+    ],
   },
   {
     id: 'pb-teklif-takibi',
@@ -875,6 +918,203 @@ export class MemoryRepo implements Repo {
   members = new Set<string>();
   async isMember(userId: string) {
     return this.members.has(userId);
+  }
+  // --- operations ---
+  projects: ProjectRow[] = [];
+  projectTaskRows: {
+    projectId: string;
+    title: string;
+    module_code: string | null;
+    done: boolean;
+  }[] = [];
+  setupForms: (SetupFormRow & { submitted_at?: string })[] = [];
+  artifactRows: { projectId: string; kind: string; content: string }[] = [];
+  subscriptions: SubscriptionRow[] = [];
+  payments: PaymentRow[] = [];
+  notes: NoteRow[] = [];
+  metrics: { projectId: string; period: string; metrics: Record<string, number> }[] = [];
+
+  async createProject(
+    p: Omit<ProjectRow, 'id' | 'satisfaction' | 'status'> & { status?: ProjectRow['status'] },
+  ) {
+    if (p.metrics_token.length < 40) throw new Error('metrics token too short');
+    if (p.proposal_id && this.projects.some((x) => x.proposal_id === p.proposal_id))
+      throw new Error('duplicate key value violates unique constraint "projects_proposal_uniq"');
+    const id = this.id();
+    this.projects.push({ status: 'setup', satisfaction: null, ...p, id });
+    return id;
+  }
+  async getProject(id: string) {
+    return this.projects.find((p) => p.id === id) ?? null;
+  }
+  async projectByProposal(proposalId: string) {
+    return this.projects.find((p) => p.proposal_id === proposalId) ?? null;
+  }
+  async projectByMetricsToken(token: string) {
+    return this.projects.find((p) => p.metrics_token === token) ?? null;
+  }
+  async activeProjects(limit: number) {
+    return this.projects
+      .filter((p) => p.status === 'setup' || p.status === 'active')
+      .slice(0, limit);
+  }
+  async updateProject(id: string, patch: Partial<Omit<ProjectRow, 'id' | 'company_id'>>) {
+    const p = this.projects.find((x) => x.id === id);
+    if (p) Object.assign(p, patch);
+  }
+  async replaceProjectTasks(projectId: string, items: { title: string; module: string | null }[]) {
+    const done = new Set(
+      this.projectTaskRows.filter((t) => t.projectId === projectId && t.done).map((t) => t.title),
+    );
+    this.projectTaskRows = this.projectTaskRows.filter((t) => t.projectId !== projectId);
+    for (const it of items)
+      this.projectTaskRows.push({
+        projectId,
+        title: it.title,
+        module_code: it.module,
+        done: done.has(it.title),
+      });
+  }
+  async projectTasks(projectId: string) {
+    return this.projectTaskRows
+      .filter((t) => t.projectId === projectId)
+      .map(({ title, module_code, done }) => ({ title, module_code, done }));
+  }
+  async createSetupForm(f: {
+    project_id: string;
+    token: string;
+    package_code: string;
+    expires_at: string;
+  }) {
+    const id = this.id();
+    this.setupForms.push({ ...f, id, answers: {}, status: 'sent' });
+    return id;
+  }
+  async setupFormByProject(projectId: string) {
+    return this.setupForms.find((f) => f.project_id === projectId) ?? null;
+  }
+  async setupFormByToken(token: string): Promise<SetupFormLookup> {
+    const f = this.setupForms.find((x) => x.token === token);
+    if (!f)
+      return {
+        result: 'not_found',
+        formId: null,
+        projectId: null,
+        packageCode: null,
+        businessName: null,
+        expiresAt: null,
+      };
+    const project = this.projects.find((p) => p.id === f.project_id);
+    const company = this.companies.find((c) => c.id === project?.company_id);
+    return {
+      result:
+        Date.parse(f.expires_at) <= this.now().getTime()
+          ? 'expired'
+          : f.status !== 'sent'
+            ? 'submitted'
+            : 'ok',
+      formId: f.id,
+      projectId: f.project_id,
+      packageCode: f.package_code,
+      businessName: company?.name ?? null,
+      expiresAt: f.expires_at,
+    };
+  }
+  async submitSetupForm(token: string, answers: Record<string, unknown>) {
+    const f = this.setupForms.find((x) => x.token === token);
+    if (!f || f.status !== 'sent' || Date.parse(f.expires_at) <= this.now().getTime()) return false;
+    Object.assign(f, { answers, status: 'submitted', submitted_at: this.now().toISOString() });
+    return true;
+  }
+  async upsertArtifact(
+    projectId: string,
+    kind: 'config' | 'claude_prompt' | 'checklist',
+    content: string,
+  ) {
+    const a = this.artifactRows.find((x) => x.projectId === projectId && x.kind === kind);
+    if (a) a.content = content;
+    else this.artifactRows.push({ projectId, kind, content });
+  }
+  async artifacts(projectId: string) {
+    return this.artifactRows
+      .filter((a) => a.projectId === projectId)
+      .map(({ kind, content }) => ({ kind, content }));
+  }
+  async createSubscription(sub: Omit<SubscriptionRow, 'id' | 'status'>) {
+    const id = this.id();
+    this.subscriptions.push({ ...sub, id, status: 'active' });
+    return id;
+  }
+  async activeSubscriptions(limit: number) {
+    return this.subscriptions.filter((x) => x.status === 'active').slice(0, limit);
+  }
+  async ensurePayment(p: Omit<PaymentRow, 'id' | 'status' | 'paid_on' | 'overdue_notified_on'>) {
+    if (
+      p.subscription_id &&
+      this.payments.some((x) => x.subscription_id === p.subscription_id && x.due_on === p.due_on)
+    )
+      return false;
+    this.payments.push({
+      ...p,
+      id: this.id(),
+      status: 'due',
+      paid_on: null,
+      overdue_notified_on: null,
+    });
+    return true;
+  }
+  async duePayments(limit: number) {
+    return this.payments
+      .filter((p) => p.status === 'due')
+      .sort((a, b) => a.due_on.localeCompare(b.due_on))
+      .slice(0, limit);
+  }
+  async markPayment(
+    id: string,
+    patch: Partial<Pick<PaymentRow, 'status' | 'paid_on' | 'overdue_notified_on'>>,
+  ) {
+    const p = this.payments.find((x) => x.id === id);
+    if (!p) return;
+    if (patch.status === 'paid' && !(patch.paid_on ?? p.paid_on))
+      throw new Error('payments_paid_has_date');
+    Object.assign(p, patch);
+  }
+  async addNote(n: Omit<NoteRow, 'id' | 'created_at'>) {
+    const id = this.id();
+    this.notes.push({ ...n, id, created_at: this.now().toISOString() });
+    return id;
+  }
+  async recentNotes(limit: number, query?: string) {
+    const q = query?.toLocaleLowerCase('tr');
+    return [...this.notes]
+      .reverse()
+      .filter((n) => !q || n.body.toLocaleLowerCase('tr').includes(q))
+      .slice(0, limit);
+  }
+  async upsertModuleMetrics(projectId: string, period: string, metrics: Record<string, number>) {
+    const m = this.metrics.find((x) => x.projectId === projectId && x.period === period);
+    if (m) m.metrics = metrics;
+    else this.metrics.push({ projectId, period, metrics });
+  }
+  async moduleMetrics(projectId: string, period: string) {
+    return (
+      this.metrics.find((x) => x.projectId === projectId && x.period === period)?.metrics ?? null
+    );
+  }
+  async companyFacts(companyId: string) {
+    return {
+      satisfaction_positive: this.projects.some(
+        (p) => p.company_id === companyId && p.satisfaction === 'positive',
+      ),
+    };
+  }
+  async setupContact(projectId: string) {
+    const a = (this.setupForms.find((f) => f.project_id === projectId)?.answers ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return { name: str(a.contact_name), email: str(a.contact_email), phone: str(a.contact_phone) };
   }
 }
 

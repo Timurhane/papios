@@ -125,9 +125,10 @@ export async function advanceEnrollments(
             instagram: company.instagram_handle,
             linkedin: null,
           },
-          facts: {},
+          facts: await deps.repo.companyFacts(company.id),
           founderSlotsAvailable: founder,
-          contractEnd: null,
+          // client sequences (Müşteri Yaşamı) are anchored to the contract end (Phase 5)
+          contractEnd: e.anchor_date,
         },
       );
       if (plan.kind === 'done') {
@@ -173,6 +174,11 @@ async function completeEnrollment(
   today: string,
 ) {
   await deps.repo.updateEnrollment(e.id, { status: 'completed' });
+  if (company.stage === 'won') {
+    // client sequences end quietly; the client's next step belongs to the project (Phase 5)
+    await deps.repo.addCompanyEvent(company.id, 'sequence_completed', `${pb.name} tamamlandı`);
+    return;
+  }
   // K-2.5 + K-11.7: unanswered sequences wait 60 days for "Uyandırma".
   await deps.repo.updateCompany(company.id, {
     stage: 'waitlist',
@@ -205,6 +211,15 @@ async function createStepTouch(
     channel: step.channel,
     recipient,
   };
+  if (step.repeat_every_days) {
+    // Recurring steps (Müşteri Yaşamı monthly report) are produced by their own scheduler (V-60).
+    await deps.repo.createTouch({
+      ...base,
+      status: 'skipped',
+      skip_reason: 'Aylık rapor kendi zamanlayıcısıyla hazırlanır',
+    });
+    return 'skipped';
+  }
   if (step.channel === 'demo')
     return demoStepTouch(deps, settings, pb, company, step, base, batchId);
   if (step.approval_exempt_kind === 'analysis_tool_report') {

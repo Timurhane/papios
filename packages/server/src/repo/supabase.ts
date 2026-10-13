@@ -21,6 +21,12 @@ import type {
   EmbeddingTable,
   InboxRow,
   MeetingRow,
+  NoteRow,
+  PaymentRow,
+  ProjectRow,
+  SetupFormLookup,
+  SetupFormRow,
+  SubscriptionRow,
   ProposalRow,
   ProposalStatus,
   ServicePackage,
@@ -44,6 +50,25 @@ const MEETING_COLUMNS =
   'id, company_id, status, proposed_slots, starts_at, duration_minutes, calendar_event_id, notes_raw, notes, source';
 const PROPOSAL_COLUMNS =
   'id, company_id, meeting_id, number, status, package_code, monthly_kurus, quote, founder_discount, vat_mode, valid_until, intro, scope, approval_id, pdf_path, sent_at';
+const PROJECT_COLUMNS =
+  'id, company_id, proposal_id, name, package_code, payment_path, monthly_kurus, setup_fee_kurus, project_kurus, status, started_on, contract_end, satisfaction, metrics_token';
+const SUB_COLUMNS =
+  'id, company_id, project_id, monthly_kurus, discounted_monthly_kurus, discount_months, started_on, commitment_months, day_of_month, status';
+const PAYMENT_COLUMNS =
+  'id, company_id, subscription_id, project_id, kind, amount_kurus, due_on, status, paid_on, overdue_notified_on';
+const NUM_KEYS = [
+  'monthly_kurus',
+  'setup_fee_kurus',
+  'project_kurus',
+  'amount_kurus',
+  'discounted_monthly_kurus',
+];
+/** bigint columns arrive as strings from PostgREST in some cases; normalize to numbers. */
+function nums<T>(row: T): T {
+  const r = { ...(row as Record<string, unknown>) };
+  for (const k of NUM_KEYS) if (typeof r[k] === 'string') r[k] = Number(r[k]);
+  return r as T;
+}
 const DEMO_COLUMNS = 'id, company_id, token, status, expires_at, visits, messages';
 
 const COMPANY_COLUMNS =
@@ -1489,5 +1514,337 @@ export class SupabaseRepo implements Repo {
       'membership',
     ) as unknown[];
     return rows.length > 0;
+  }
+
+  // --- operations --------------------------------------------------------------------------------
+
+  async createProject(
+    p: Omit<ProjectRow, 'id' | 'satisfaction' | 'status'> & { status?: ProjectRow['status'] },
+  ) {
+    return (
+      must(
+        await this.db
+          .from('projects')
+          .insert({ ...p, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create project',
+      ) as { id: string }
+    ).id;
+  }
+
+  private async projectWhere(column: 'id' | 'proposal_id' | 'metrics_token', value: string) {
+    const r = must(
+      await this.db
+        .from('projects')
+        .select(PROJECT_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq(column, value)
+        .maybeSingle(),
+      'get project',
+    ) as ProjectRow | null;
+    return r ? nums(r) : null;
+  }
+
+  async getProject(id: string) {
+    return this.projectWhere('id', id);
+  }
+
+  async projectByProposal(proposalId: string) {
+    return this.projectWhere('proposal_id', proposalId);
+  }
+
+  async projectByMetricsToken(token: string) {
+    return this.projectWhere('metrics_token', token);
+  }
+
+  async activeProjects(limit: number) {
+    const rows = must(
+      await this.db
+        .from('projects')
+        .select(PROJECT_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .in('status', ['setup', 'active'])
+        .order('started_on')
+        .limit(limit),
+      'active projects',
+    ) as ProjectRow[];
+    return rows.map(nums);
+  }
+
+  async updateProject(id: string, patch: Partial<Omit<ProjectRow, 'id' | 'company_id'>>) {
+    must(
+      await this.db.from('projects').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update project',
+    );
+  }
+
+  async replaceProjectTasks(projectId: string, items: { title: string; module: string | null }[]) {
+    const done = new Set(
+      (
+        must(
+          await this.db
+            .from('project_tasks')
+            .select('title')
+            .eq('tenant_id', this.tenantId)
+            .eq('project_id', projectId)
+            .eq('done', true),
+          'done tasks',
+        ) as { title: string }[]
+      ).map((t) => t.title),
+    );
+    must(
+      await this.db
+        .from('project_tasks')
+        .delete()
+        .eq('tenant_id', this.tenantId)
+        .eq('project_id', projectId),
+      'clear tasks',
+    );
+    if (!items.length) return;
+    must(
+      await this.db.from('project_tasks').insert(
+        items.map((it, i) => ({
+          tenant_id: this.tenantId,
+          project_id: projectId,
+          position: i + 1,
+          title: it.title,
+          module_code: it.module,
+          done: done.has(it.title),
+          done_at: done.has(it.title) ? new Date().toISOString() : null,
+        })),
+      ),
+      'insert tasks',
+    );
+  }
+
+  async projectTasks(projectId: string) {
+    return must(
+      await this.db
+        .from('project_tasks')
+        .select('title, module_code, done')
+        .eq('tenant_id', this.tenantId)
+        .eq('project_id', projectId)
+        .order('position'),
+      'project tasks',
+    ) as { title: string; module_code: string | null; done: boolean }[];
+  }
+
+  async createSetupForm(f: {
+    project_id: string;
+    token: string;
+    package_code: string;
+    expires_at: string;
+  }) {
+    return (
+      must(
+        await this.db
+          .from('setup_forms')
+          .insert({ ...f, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create setup form',
+      ) as { id: string }
+    ).id;
+  }
+
+  async setupFormByProject(projectId: string) {
+    return must(
+      await this.db
+        .from('setup_forms')
+        .select('id, project_id, token, package_code, answers, status, expires_at')
+        .eq('tenant_id', this.tenantId)
+        .eq('project_id', projectId)
+        .maybeSingle(),
+      'setup form',
+    ) as SetupFormRow | null;
+  }
+
+  async setupFormByToken(token: string): Promise<SetupFormLookup> {
+    const rows = must(
+      await this.db.schema('app').rpc('setup_form_by_token', { p_token: token }),
+      'setup form by token',
+    ) as {
+      result: SetupFormLookup['result'];
+      form_id: string | null;
+      project_id: string | null;
+      package_code: string | null;
+      expires_at: string | null;
+      business_name: string | null;
+    }[];
+    const r = rows[0];
+    return {
+      result: r?.result ?? 'not_found',
+      formId: r?.form_id ?? null,
+      projectId: r?.project_id ?? null,
+      packageCode: r?.package_code ?? null,
+      businessName: r?.business_name ?? null,
+      expiresAt: r?.expires_at ?? null,
+    };
+  }
+
+  async submitSetupForm(token: string, answers: Record<string, unknown>) {
+    return must(
+      await this.db.schema('app').rpc('submit_setup_form', { p_token: token, p_answers: answers }),
+      'submit setup form',
+    ) as boolean;
+  }
+
+  async upsertArtifact(
+    projectId: string,
+    kind: 'config' | 'claude_prompt' | 'checklist',
+    content: string,
+  ) {
+    must(
+      await this.db
+        .from('project_artifacts')
+        .upsert(
+          { tenant_id: this.tenantId, project_id: projectId, kind, content },
+          { onConflict: 'project_id,kind' },
+        ),
+      'upsert artifact',
+    );
+  }
+
+  async artifacts(projectId: string) {
+    return must(
+      await this.db
+        .from('project_artifacts')
+        .select('kind, content')
+        .eq('tenant_id', this.tenantId)
+        .eq('project_id', projectId),
+      'artifacts',
+    ) as { kind: string; content: string }[];
+  }
+
+  async createSubscription(sub: Omit<SubscriptionRow, 'id' | 'status'>) {
+    return (
+      must(
+        await this.db
+          .from('subscriptions')
+          .insert({ ...sub, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create subscription',
+      ) as { id: string }
+    ).id;
+  }
+
+  async activeSubscriptions(limit: number) {
+    const rows = must(
+      await this.db
+        .from('subscriptions')
+        .select(SUB_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'active')
+        .limit(limit),
+      'active subscriptions',
+    ) as SubscriptionRow[];
+    return rows.map(nums);
+  }
+
+  async ensurePayment(p: Omit<PaymentRow, 'id' | 'status' | 'paid_on' | 'overdue_notified_on'>) {
+    const res = await this.db.from('payments').insert({ ...p, tenant_id: this.tenantId });
+    if (res.error?.code === '23505') return false;
+    must(res, 'ensure payment');
+    return true;
+  }
+
+  async duePayments(limit: number) {
+    const rows = must(
+      await this.db
+        .from('payments')
+        .select(PAYMENT_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'due')
+        .order('due_on')
+        .limit(limit),
+      'due payments',
+    ) as PaymentRow[];
+    return rows.map(nums);
+  }
+
+  async markPayment(
+    id: string,
+    patch: Partial<Pick<PaymentRow, 'status' | 'paid_on' | 'overdue_notified_on'>>,
+  ) {
+    must(
+      await this.db.from('payments').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'mark payment',
+    );
+  }
+
+  async addNote(n: Omit<NoteRow, 'id' | 'created_at'>) {
+    return (
+      must(
+        await this.db
+          .from('notes')
+          .insert({ ...n, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'add note',
+      ) as { id: string }
+    ).id;
+  }
+
+  async recentNotes(limit: number, query?: string) {
+    let q = this.db
+      .from('notes')
+      .select('id, company_id, project_id, body, tags, source, created_at')
+      .eq('tenant_id', this.tenantId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    const s = query?.replace(/[%,()]/g, ' ').trim();
+    if (s) q = q.ilike('body', `%${s}%`);
+    return must(await q, 'notes') as NoteRow[];
+  }
+
+  async upsertModuleMetrics(projectId: string, period: string, metrics: Record<string, number>) {
+    must(
+      await this.db.from('module_metrics').upsert(
+        {
+          tenant_id: this.tenantId,
+          project_id: projectId,
+          period,
+          metrics,
+          received_at: new Date().toISOString(),
+        },
+        { onConflict: 'project_id,period' },
+      ),
+      'module metrics',
+    );
+  }
+
+  async moduleMetrics(projectId: string, period: string) {
+    const r = must(
+      await this.db
+        .from('module_metrics')
+        .select('metrics')
+        .eq('tenant_id', this.tenantId)
+        .eq('project_id', projectId)
+        .eq('period', period)
+        .maybeSingle(),
+      'get module metrics',
+    ) as { metrics: Record<string, number> } | null;
+    return r?.metrics ?? null;
+  }
+
+  async companyFacts(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('projects')
+        .select('satisfaction')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId),
+      'company facts',
+    ) as { satisfaction: string | null }[];
+    return { satisfaction_positive: rows.some((r) => r.satisfaction === 'positive') };
+  }
+
+  async setupContact(projectId: string) {
+    const form = await this.setupFormByProject(projectId);
+    const a = (form?.answers ?? {}) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return { name: str(a.contact_name), email: str(a.contact_email), phone: str(a.contact_phone) };
   }
 }
