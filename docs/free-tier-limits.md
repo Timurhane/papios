@@ -73,7 +73,7 @@ GitHub dakikaları iş başına yukarı yuvarlar. Şu anki CI 4 iş çalıştır
 | Tarayıcı/toplu analiz (Faz 2+, günde ~15 dk) | ~450                |
 | **Toplam**                                   | **~1.400 / 2.000**  |
 
-Repo herkese açık olursa bu sınır kalkar (A-4 açık karar).
+Repo özel kalır (K-17.8); bütçe 2.000 dk/ay'a göre planlanır.
 
 ## LLM ve ses
 
@@ -98,7 +98,7 @@ Repo herkese açık olursa bu sınır kalkar (A-4 açık karar).
 | Telegram Bot API       | Ücretsiz                                                               | —                                          | [Bot API](https://core.telegram.org/bots/api)                               |
 | Instagram Graph API    | Faz 2'de                                                               | —                                          | [Graph API](https://developers.facebook.com/docs/instagram-platform)        |
 
-## Hata takibi kararı için öneri (A-2)
+## Hata takibi (A-2 → K-3.13 değişikliği: kendi hata tablosu)
 
 Sentry'nin kart isteyip istemediği doğrulanamadığı için öneri: **kendi hata tablon** (`error_events`, Faz 1).
 Worker ve Actions hataları bu tabloya yazılır, panelde "Sistem sağlığı" altında görünür, kritik olanlar Telegram'a

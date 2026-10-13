@@ -17,7 +17,7 @@ select is((select total_slots || '/' || used_slots from public.founder_discount)
 select is((select count(*)::int from public.playbooks), 11, '10 playbooks + partner referral sequence');
 select is(
   (select count(*)::int from public.playbook_steps s join public.playbooks p on p.id = s.playbook_id
-   where p.code = 'soguk_ana'), 7, 'Soğuk Ana steps as listed (V-13)');
+   where p.code = 'soguk_ana'), 8, 'Soğuk Ana has 8 touches (K-11.7)');
 select is(
   (select max(day_offset) from public.playbook_steps s join public.playbooks p on p.id = s.playbook_id
    where p.code = 'soguk_ana'), 21, 'Soğuk Ana lasts 21 days');

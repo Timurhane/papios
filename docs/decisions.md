@@ -52,6 +52,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **K-3.11** Harita: Leaflet + OpenStreetMap.
 - **K-3.12** Herkese açık formlarda bot koruması: Cloudflare Turnstile.
 - **K-3.13** Hata takibi: Sentry ücretsiz katmanı (kart istemiyorsa) veya kendi hata tablosu.
+  - Değişiklik (2026-10-13, Timurhan onayı, A-2): **kendi hata tablosu** (`error_events`); ciddi hatalar Telegram'a anında gider. Sentry kullanılmaz.
 - **K-3.14** Monorepo yapısı: `apps/{api,web,jobs}`, `packages/{core,prompts,modules}`, `supabase/{migrations,seed,policies}`, `docs/`, `.github/workflows/`. İyileştirme yapılırsa Timurhan'a bildirilir.
 - **K-3.15** Kuyruk: Supabase'de tablo tabanlı `jobs` (tür, payload, durum, `run_after`, deneme sayısı, kilit). Worker cron'u her dakika kısa işleri dağıtır; ağır işler GitHub Actions'a devredilir.
 - **K-3.16** Workers ücretsiz CPU süresi sınırı dikkate alınır; ağır parse/tarama Actions'ta.
@@ -146,6 +147,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **K-11.3** Seed set: Soğuk Ana (21 gün, 8 temas), Hafif Soğuk (14 gün, 4 temas), Sinyal (10 gün, 4–5 temas), Sıcak Gelen, Ziyaret Sonrası, Teklif Takibi, Uyandırma, Şimdi Değil, Referans (+ ortaklar dizisi), Müşteri Yaşamı — adımlar talimat Bölüm 11'deki gibi.
 - **K-11.4** Sıcak Gelen: analiz raporu anında ve onaysız; aynı gün arama görevi; G2 görüşme teklifi (onaylı); G5 takip; "ilk cevap süresi" ölçülür.
 - **K-11.5** Teklif Takibi'nde kurucu indirimi kontenjanı açısı yalnızca gerçek durum doğruysa.
+- **K-11.7** (2026-10-13, Timurhan onayı) Soğuk Ana'nın 8. teması: G17 kısa LinkedIn mesajı. Sıra: G1 mail, G3 WhatsApp, G5 Instagram DM, G7 demo, G10 telefon, G14 fikir maili, G17 LinkedIn, G21 kapanış maili.
 - **K-11.6** Papi öğrenimlerden playbook değişikliği **önerir**; uygulama Timurhan'ın onayıyla.
 
 ## Analiz aracı (Bölüm 12)
@@ -195,6 +197,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ## Güvenlik ve yasal (Bölüm 17)
 
+- **K-17.8** (2026-10-13, Timurhan onayı, A-4) GitHub reposu **özel** kalır; Actions dakika bütçesi 2.000 dk/ay'a göre planlanır.
 - **K-17.1** Panel girişi: Supabase Auth, mail + şifre + **zorunlu TOTP**. Kayıt kapalı; yalnızca tanımlı tek mail giriş yapabilir.
 - **K-17.2** RLS tüm tablolarda, `tenant_id` bazlı. Servis anahtarı yalnızca sunucu tarafında.
 - **K-17.3** Gizli bilgi repoya girerse commit engellenir (gitleaks veya pre-commit kontrolü).
@@ -215,14 +218,12 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ## Açık kararlar (Timurhan onayı bekliyor)
 
-| #   | Konu                                                                             | Ne zaman gerekli                            |
-| --- | -------------------------------------------------------------------------------- | ------------------------------------------- |
-| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)                            | Faz 3 öncesi                                |
-| A-2 | Hata takibi: Sentry (kartsızsa) vs kendi hata tablosu (K-3.13)                   | Faz 0 içinde, limitler doğrulandıktan sonra |
-| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)                         | Faz 1                                       |
-| A-4 | GitHub reposu özel mi herkese açık mı (Actions dakika kotasını belirler, K-3.17) | Faz 0                                       |
-| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5)                   | Faz 7 (ama Faz 0'da bilinmesi iyi)          |
-| A-6 | KDV dahil/hariç (K-7.2)                                                          | İlk teklifte                                |
+| #   | Konu                                                           | Ne zaman gerekli                   |
+| --- | -------------------------------------------------------------- | ---------------------------------- |
+| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)          | Faz 3 öncesi                       |
+| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)       | Faz 1                              |
+| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5) | Faz 7 (ama Faz 0'da bilinmesi iyi) |
+| A-6 | KDV dahil/hariç (K-7.2)                                        | İlk teklifte                       |
 
 ## Varsayımlar
 
@@ -240,7 +241,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-10** Reddedenler listesi ham değeri değil, normalize edilmiş değerin SHA-256 özetini saklar; kişi KVKK kapsamında silinse bile engel sürer.
 - **V-11** Mail ısınma eğrisi: günde 20 ile başla, her 7 günde +5, en çok 50; gönderimler arası rastgele 4–15 dk. Ayarlardan değişir.
 - **V-12** Analiz aracı günlük toplam limit varsayılanı 20.
-- **V-13** Soğuk Ana için talimatta "8 temas" yazıyor ama 7 adım listelenmiş; listelenen 7 adım seed edildi. **8. temas ne olsun?**
+- **V-13** ~~Soğuk Ana 8. temas~~ → K-11.7 ile karara bağlandı.
 - **V-14** Hafif Soğuk adımları: G1 mail, G4 WhatsApp, G8 Instagram DM, G14 kapanış maili.
 - **V-15** Sinyal adımları: G1 mail, G3 WhatsApp, G5 Instagram DM, G7 telefon, G10 kapanış maili.
 - **V-16** Teklif Takibi kanalları: G2 mail (soru), G5 WhatsApp (örnek), G10 mail (kurucu kontenjanı, yalnızca gerçekse), G20 mail (son takip).
