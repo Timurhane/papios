@@ -241,8 +241,9 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
   (randevu/WhatsApp/sohbet eklenmesi-kaldırılması, yeni şube, kampanya ya da iş ilanı sayfası) sinyal olur;
   (b) haftada en fazla 20 firma için Gemini aramasıyla haber taraması; (c) OSM'de ilgili sektörlerde yeni açılan
   işletmeler haftalık. Instagram bağlanırsa paylaşım sıklığı eklenir.
-- **K-3.18** (D-2) Harita konumu: adresi olan firmalar OpenStreetMap Nominatim ile (saniyede 1 istek, sonuç saklanır,
-  atıf gösterilir) GitHub Actions'ta toplu konumlandırılır.
+- **K-3.18** (D-2) Harita konumu: adresi olan firmalar OpenStreetMap Nominatim ile (sonuç saklanır, atıf gösterilir)
+  GitHub Actions'ta toplu konumlandırılır. _Uygulama notu:_ resmi politika düzenli çalışan betikleri dakikada 4
+  istekle sınırlıyor; bu yüzden "saniyede 1" yerine 15 saniyede 1 istek kullanılıyor (karar özü aynı, daha sıkı uyum).
 
 ## Açık kararlar (Timurhan onayı bekliyor)
 
@@ -323,3 +324,28 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-64** Teslim edilen modüller aylık sayıları kişisel veri olmadan, projeye özel bir anahtarla Papi'ye gönderir. Aylık rapor yalnızca şablonla hazırlanır ve onayla gider.
 - **V-65** Cevap asistanında mesajlar saklanmaz, yalnızca sayılır. Telefon ya da e-posta bırakan mesaj işletme sahibine Telegram'dan bildirilir; bu bildirim müşterinin kendi hesabında olur. `/chat` için Cloudflare hız sınırı kuralı önerilir.
 - **V-66** Not araması şimdilik metin ve etiketle yapılır. Notların anlam araması (embedding), kişisel veri ayıklamasıyla Faz 6'da Papi'nin hafızasına bağlanır.
+- **V-67** Gece vardiyası varsayılanları: bölge `Balıkesir`, sektörler klinik/emlak/oto/otel/eğitim/inşaat, gece en fazla
+  2 OSM araması (30 dakikada bir) ve 10 taslak; taslak bütçesi dolunca dizi ilerletme sabaha kalır. Ayarlardan değişir.
+- **V-68** Faz 5'teki sabit zamanlı işler (09:05 tahsilat kontrolü, ayın 1'i müşteri raporları) artık rutin
+  (`odeme_gecikme`, `aylik_musteri_raporlari`); saatleri Rutinler ekranından değişir. 10 hazır rutin seed'de.
+- **V-69** Kuyruktaki `unique` seçeneği iş **türüne** göre tekilleştirir; bu yüzden rutin çalıştırma ve cevap taslağı
+  işleri `unique` kullanmaz (aksi halde aynı anda iki rutin/iki cevap kaybolurdu). Rutin aynı vakti iki kez
+  çalıştırmaz: kuyruğa koyarken sıradaki zamana geçer.
+- **V-70** İlk kez görülen (veya yeniden açılan / saati değişen) rutin hemen çalışmaz; yalnızca sıradaki zamanı
+  hesaplanır.
+- **V-71** OSM "yeni açılan işletme" sinyali: bir bölge×sektör ilk kez tarandığında bulunanlar sinyal sayılmaz (zaten
+  vardılar); sonraki haftalık taramalarda yeni görünenler `new_opening` sinyali olur. Haftalık çalışmada en fazla 6
+  bölge×sektör sorgusu (Overpass nezaketi), sıra döner.
+- **V-72** Sinyal, açık (analiz edilmiş / bekleme / yeni) firmayı Sinyal playbook'una alır ve yeniden analiz/puanlama
+  kuyruğa girer. Aynı değişiklik aynı ISO haftasında bir kez kaydedilir (fingerprint).
+- **V-73** Kazanılmış müşteriye (projeye bağlı ya da aşaması `won` firmaya) ait notlar hiç embedding'e gitmez; diğer
+  notlar kişisel veri ayıklanarak gömülür. Papi'nin `search_notes` aracı sonuçları da ayıklanmış döner.
+- **V-74** Konum bir adres için bir kez aranır (bulunsun ya da bulunmasın, `geocoded_at`); adres değişirse yeniden
+  aranır. Birikmiş adresler kovalanmaz: her Actions çalışmasında ≤20 adres (≈5 dk).
+- **V-75** Kalem içerikleri onaydan sonra panelde paylaşıma hazır olur: X için önceden doldurulmuş paylaşım linki;
+  LinkedIn ve Instagram'da önceden doldurma linki olmadığından "Metni kopyala + aç". "Paylaştım" ile kayda geçer.
+- **V-76** Ölçütler: ilk cevap süresi = firma başına ilk gönderilen temastan sonraki ilk cevaba kadar geçen saat,
+  firmaların medyanı. Kanal filtresi temas ve cevaplara uygulanır; görüşme/teklif/kazanım kanaldan bağımsız.
+  GitHub Actions dakikaları API ile değil, GitHub ayarlarından izlenir.
+- **V-77** Ziyaret rotası kuş uçuşu en yakın komşu sırasıdır (ücretsiz rota servisi yok); başlangıç noktası
+  ayarlardan (`intelligence.home`). Yazdırılabilir sayfada kişi bilgisi yer almaz.

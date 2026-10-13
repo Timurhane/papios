@@ -325,7 +325,7 @@ describe('geocoding (K-3.18)', () => {
       missing: 0,
     });
     expect(urls).toHaveLength(1); // second identical address came from the cache
-    expect(slept).toEqual([1100]);
+    expect(slept).toEqual([15_000]);
     expect(repo.locations.get(a)).toEqual({ lat: 39.65, lng: 27.88 });
     expect(repo.locations.get(b)).toEqual({ lat: 39.65, lng: 27.88 });
   });

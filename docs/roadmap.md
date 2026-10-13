@@ -73,10 +73,12 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 6 — Zeka ve otomasyon
 
-- [ ] Rutinler (hazır + doğal dille), gece vardiyası ve uyku modu
-- [ ] Sinyal motoru, Kalem, haftalık patron özeti, öğrenen sistem önerileri
-- [ ] Ölçütler ekranı, harita ve ziyaret rotası
-- [ ] **Kabul:** `/uyuyorum` sonrası vardiya çalışıyor, `/uyandim` ile özet geliyor; rutinler zamanında çalışıyor
+- [x] Rutinler (hazır + doğal dille), gece vardiyası ve uyku modu
+- [x] Sinyal motoru, Kalem, haftalık patron özeti, öğrenen sistem önerileri
+- [x] Ölçütler ekranı, harita ve ziyaret rotası
+- [x] Notların anlam araması Papi'nin araçlarında (`search_notes`)
+- [x] **Kabul (kod + testler):** `/uyuyorum` sonrası vardiya çalışıyor, `/uyandim` ile özet geliyor; rutinler
+      zamanında çalışıyor (`apps/api/src/automation.test.ts`). Canlı kabul masaüstü kurulum oturumunda.
 
 ## Faz 7 — Dış yüz ve sertleştirme
 

@@ -267,10 +267,35 @@ Müşteri: GET/POST /kurulum/:anahtar (Turnstile) → app.submit_setup_form (bir
   → Operatör.onSetupFormSubmitted: papi-config.json + Claude Code promptu + kontrol listesi (şablon, model yok)
 Teslim edilen modül (müşterinin hesabı) → POST /metrics/push (Bearer metrics_token; yalnızca sayılar)
   → module_metrics → ayın 1'i: aylık rapor taslağı → onay → e-posta
-Cron: 09:05 finance.daily (aylık tahsilatlar + gecikme bildirimi) · ayın 1'i 09:20 client.monthly_report
+Faz 6'dan itibaren tahsilat kontrolü ve aylık raporlar rutin olarak çalışır (bkz. §18).
 ```
 
 - `packages/modules`: katalog, kurulum formu alanları, müşteri yapılandırma şeması (zod → `config.schema.json`),
   Operatör şablonları; her modülde README/SETUP/TESTS; `cevap-asistani/worker` çalışan referans (site kutusu,
   Instagram DM, kapalı WhatsApp, ilgilenen bildirimi, aylık sayılar).
 - Müşteri verisi (form cevapları, yapılandırma) `client_sensitive`: hiçbir modele gitmez; çıktılar şablonla üretilir.
+
+## 18. Faz 6: Zeka ve otomasyon
+
+```
+Worker cron (her dakika):
+  tickRoutines → vadesi gelen rutin → kuyruk 'routine.run' → runRoutine (izinli 13 eylem) → Telegram (daily_report)
+  sessizse ve dakika%30=0 → nightShiftTick → 'kasif.osm_search' (Actions) · bütçe: gece 2 arama, 10 taslak
+  ulaşma adımı 0: nightDraftBudgetUsed ise taslak üretimi sabaha kalır · adım 1: reconcileAutomationDecisions
+Telegram: /uyuyorum → sessiz mod + startNightShift · /uyandim → endNightShift özeti
+          /rutin [istek | kapat n | ac n] → model yalnızca yapı çıkarır → validateRoutine → onay düğmesi → saveRoutine
+Actions (heavy):
+  signals.site_scan  → siteFeatures + diffSiteFeatures (ISO hafta fingerprint) → signals → Sinyal playbook'u
+  signals.news       → Gemini grounding (public) → signals
+  signals.osm_new    → Overpass, bölge×sektör sırası; ilk kapsamadan sonra yeni görünenler → new_opening
+  intel.competitors / intel.sector_news → grounded özet → Telegram
+  geo.geocode        → Nominatim (15 sn arayla, app.geocode_cache) → companies.lat/lng/geocoded_at
+Rutin eylemleri: content_plan (Kalem → content_items + onay; yer adı geçen taslak elenir),
+  learning_review (düzeltmelerden kural, adım performansından playbook önerisi → suggestions + onay)
+Embed: notes (app.notes_to_embed: müşteriye ait notlar hariç) → redactPersonal → embedding → app.match_notes
+Panel: Rutinler (saat/aç-kapa, doğal dil → /panel/routine.parse|save) · İçerik · Ölçütler · Harita (Leaflet + OSM)
+```
+
+- Rutin eylemleri veritabanında da izinli listeyle kısıtlı (check constraint); rutin keyfi kod çalıştıramaz.
+- Öneriler ve içerikler onay kuyruğundan geçer; onaylanmadan hiçbir kural/playbook değişmez.
+- Harita karoları `tile.openstreetmap.org` (atıf görünür); panel `Referrer-Policy: strict-origin-when-cross-origin`.

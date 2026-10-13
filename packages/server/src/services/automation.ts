@@ -704,7 +704,11 @@ export async function reconcileAutomationDecisions(
 
 // --- geocoding (K-3.18) ------------------------------------------------------------------------------------
 
-/** Nominatim usage policy: ≤ 1 request/second, identifying User-Agent, cache results, show attribution. */
+/**
+ * Nominatim usage policy: identifying User-Agent, cached results, attribution; scripts that run at
+ * regular intervals are limited to 4 requests per minute, hence one request every 15 seconds.
+ */
+export const NOMINATIM_GAP_MS = 15_000;
 export async function geocodeCompanies(
   deps: Pick<AutomationDeps, 'repo'>,
   limit: number,
@@ -729,7 +733,7 @@ export async function geocodeCompanies(
           ? { lat: Number(r.lat), lng: Number(r.lon), found: true }
           : { lat: null, lng: null, found: false };
       if (res.ok) await deps.repo.cacheGeocode(key, hit);
-      await sleep(1100);
+      await sleep(NOMINATIM_GAP_MS);
     }
     await deps.repo.setCompanyLocation(c.id, hit.lat, hit.lng);
     if (hit.found) found++;

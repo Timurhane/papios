@@ -28,13 +28,13 @@ export interface HeavyDeps {
   pageSpeedKey?: string;
   panelUrl?: string;
   instagram?: InstagramDiscovery | null;
-  /** Injected in tests (Nominatim's 1 request/second pause). */
+  /** Injected in tests (Nominatim pause between requests). */
   sleep?: (ms: number) => Promise<void>;
 }
 
 const BATCH = 10;
-/** Nominatim at 1 req/s (K-3.18): one run geocodes at most this many companies. */
-const GEOCODE_PER_RUN = 60;
+/** Nominatim at 4 req/min (K-3.18): at most ~5 Actions minutes per run; the rest waits for the next run. */
+const GEOCODE_PER_RUN = 20;
 /** Overpass etiquette: at most this many area × sector queries per weekly run. */
 const OSM_PAIRS_PER_RUN = 6;
 
@@ -234,17 +234,15 @@ export function buildHeavyRegistry(deps: HeavyDeps): JobRegistry {
       .register('intel.sector_news', async () => {
         await tell(deps, await intelDigest({ repo, llm }, 'sector'));
       })
-      // K-3.18: Nominatim, 1 request/second, cached; the map shows OSM attribution.
+      // K-3.18: Nominatim, 4 requests/minute, cached; the map shows OSM attribution.
+      // A backlog is not chased: the next heavy run (scan, import) continues it, keeping Actions minutes low.
       .register('geo.geocode', async () => {
-        const r = await geocodeCompanies(
+        await geocodeCompanies(
           { repo },
           GEOCODE_PER_RUN,
           deps.fetchFn ?? fetch,
           deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms))),
         );
-        // a running job blocks a unique enqueue of its own type, so the follow-up is a plain one
-        if (r.found + r.missing === GEOCODE_PER_RUN)
-          await repo.enqueue('geo.geocode', {}, { heavy: true });
       })
   );
 }

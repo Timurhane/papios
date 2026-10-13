@@ -1,6 +1,6 @@
 # Faz 6 planı — Zeka ve otomasyon
 
-Durum: **Uygulanıyor** (Timurhan onayladı; D-1 → K-8.11, D-2 → K-3.18).
+Durum: **Tamamlandı (kod)**, canlı kabul masaüstü kurulum oturumunda. D-1 → K-8.11, D-2 → K-3.18.
 Kabul: `/uyuyorum` sonrası gece vardiyası çalışıyor, `/uyandim` ile özet geliyor; rutinler zamanında çalışıyor.
 
 ## Adımlar
@@ -39,5 +39,5 @@ Kabul: `/uyuyorum` sonrası gece vardiyası çalışıyor, `/uyandim` ile özet 
   ilgili sektörlerde yeni açılan işletmeler haftalık. Instagram bağlanırsa paylaşım sıklığı da eklenir.
   Alternatif: yalnızca site değişiklikleri (en ucuz, en az sinyal).
 - **D-2 — Haritada konum.** Öneri: adresi olan firmaların konumu OpenStreetMap'in ücretsiz adres arama servisiyle
-  (Nominatim; saniyede 1 istek, sonuç saklanır, atıf gösterilir) GitHub Actions'ta toplu bulunur. Alternatif:
+  (Nominatim; politika gereği 15 saniyede 1 istek, sonuç saklanır, atıf gösterilir) GitHub Actions'ta toplu bulunur. Alternatif:
   yalnızca OSM'den gelen firmalar haritada görünür (konumu zaten olanlar).
