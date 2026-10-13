@@ -12,3 +12,8 @@ export { papiSystem } from './papi/system.ts';
 export { approvalRevise } from './papi/approval-revise.ts';
 export { analistSummary } from './analist/summary.ts';
 export { ulakDraft } from './ulak/draft.ts';
+export { saticiMeetingNotes } from './satici/meeting-notes.ts';
+export { saticiProposal } from './satici/proposal.ts';
+export { saticiReply } from './satici/reply.ts';
+export { saticiBrief } from './satici/brief.ts';
+export { demoAssistant } from './demo/assistant.ts';

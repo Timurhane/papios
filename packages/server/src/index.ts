@@ -9,3 +9,5 @@ export * from './adapters/places.ts';
 export * from './telegram-client.ts';
 export * from './services/mail.ts';
 export * from './services/ulak.ts';
+export * from './services/satici.ts';
+export * from './services/calendar.ts';

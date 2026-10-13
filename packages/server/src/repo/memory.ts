@@ -5,6 +5,7 @@ import {
   normalizeEmail,
   normalizePhone,
   type DedupeKeys,
+  type FounderTerms,
   type Job,
   type PlaybookStep,
   type QueueStore,
@@ -15,13 +16,20 @@ import type {
   ApprovalRow,
   CompanyPatch,
   CompanyRow,
+  DemoRow,
+  DemoTouch,
   EmbeddingTable,
   EnrollmentRow,
   InboxInput,
+  InboxRow,
   KnowledgeHit,
+  MeetingRow,
   NewCompany,
   PlaybookWithSteps,
+  ProposalRow,
+  ProposalStatus,
   Repo,
+  ServicePackage,
   TouchRow,
   TouchStatus,
   UsageSummary,
@@ -107,6 +115,15 @@ export const TEST_PLAYBOOKS: PlaybookWithSteps[] = [
     name: 'Şimdi Değil',
     steps: [step({ position: 1, day_offset: 90, channel: 'email' })],
   },
+  {
+    id: 'pb-teklif-takibi',
+    code: 'teklif_takibi',
+    name: 'Teklif Takibi',
+    steps: [
+      step({ position: 1, day_offset: 2, channel: 'email', angle: 'Teklifle ilgili soru' }),
+      step({ position: 2, day_offset: 20, channel: 'email', angle: 'Son takip' }),
+    ],
+  },
 ];
 
 const TOUCH_DEFAULTS: Omit<TouchRow, 'id' | 'company_id' | 'channel' | 'status'> = {
@@ -172,6 +189,39 @@ export class MemoryRepo implements Repo {
   tone = { description: '', dos: [] as string[], donts: [] as string[], examples: [] as string[] };
   banned: string[] = [];
   founderSlots = { total: 3, used: 0 };
+  packages: ServicePackage[] = [
+    {
+      code: 'refleks',
+      name: 'Refleks',
+      monthly_kurus: 1_750_000,
+      starting_from: false,
+      has_payment_paths: true,
+      summary: 'Gelen her mesaja anında cevap ve takip.',
+      features: ['Anında cevap veren asistan', 'Aylık performans raporu'],
+    },
+    {
+      code: 'sistem',
+      name: 'Sistem',
+      monthly_kurus: 2_550_000,
+      starting_from: false,
+      has_payment_paths: true,
+      summary: "Refleks'in tamamı + satış, randevu ve yorum otomasyonları.",
+      features: ['Teklif ve satış takibi', 'Randevu ve ödeme hatırlatmaları'],
+    },
+    {
+      code: 'operasyon',
+      name: 'Operasyon',
+      monthly_kurus: 4_000_000,
+      starting_from: true,
+      has_payment_paths: true,
+      summary: "Sistem'in tamamı + işletmeye özel iç süreç otomasyonları.",
+      features: ['İç süreç otomasyonları', 'Aylık strateji görüşmesi'],
+    },
+  ];
+  meetings: MeetingRow[] = [];
+  proposals: ProposalRow[] = [];
+  demos: (DemoRow & { snapshot: Record<string, unknown>; usage: Map<string, number> })[] = [];
+  rateHits = new Map<string, number>();
   private seq = 0;
 
   private id() {
@@ -659,6 +709,168 @@ export class MemoryRepo implements Repo {
   async primaryContact(companyId: string) {
     const c = this.contacts.find((x) => x.companyId === companyId);
     return c ? { id: `contact-${companyId}`, full_name: c.full_name ?? null } : null;
+  }
+  async getInboxMessage(id: string): Promise<InboxRow | null> {
+    return this.inbox.find((m) => m.id === id) ?? null;
+  }
+  async servicePackages() {
+    return this.packages;
+  }
+  async founderTerms(): Promise<FounderTerms | null> {
+    return {
+      slotsLeft: this.founderSlots.total - this.founderSlots.used,
+      setupMaxPct: 40,
+      setupPct: 40,
+      monthlyPct: 20,
+      monthlyMonths: 3,
+    };
+  }
+  async contactNames(companyId: string) {
+    return this.contacts
+      .filter((c) => c.companyId === companyId)
+      .map((c) => c.full_name)
+      .filter((n): n is string => !!n);
+  }
+  async createMeeting(
+    m: Partial<Omit<MeetingRow, 'id'>> & Pick<MeetingRow, 'company_id' | 'status'>,
+  ) {
+    const id = this.id();
+    this.meetings.push({
+      proposed_slots: [],
+      starts_at: null,
+      duration_minutes: 30,
+      calendar_event_id: null,
+      notes_raw: null,
+      notes: null,
+      source: null,
+      ...m,
+      id,
+    });
+    return id;
+  }
+  async updateMeeting(id: string, patch: Partial<Omit<MeetingRow, 'id' | 'company_id'>>) {
+    const m = this.meetings.find((x) => x.id === id);
+    if (m) Object.assign(m, patch);
+  }
+  async getMeeting(id: string) {
+    return this.meetings.find((m) => m.id === id) ?? null;
+  }
+  async latestMeeting(companyId: string) {
+    return [...this.meetings].reverse().find((m) => m.company_id === companyId) ?? null;
+  }
+  async createProposal(
+    p: Partial<Omit<ProposalRow, 'id' | 'number'>> &
+      Pick<ProposalRow, 'company_id' | 'package_code' | 'valid_until' | 'status'>,
+  ) {
+    if (p.vat_mode == null && p.status !== 'draft' && p.status !== 'cancelled')
+      throw new Error('proposals_vat_before_approval');
+    const id = this.id();
+    const number = `AJNA-2026-${String(this.proposals.length + 1).padStart(4, '0')}`;
+    this.proposals.push({
+      meeting_id: null,
+      monthly_kurus: null,
+      quote: {},
+      founder_discount: null,
+      vat_mode: null,
+      intro: null,
+      scope: [],
+      approval_id: null,
+      pdf_path: null,
+      sent_at: null,
+      ...p,
+      id,
+      number,
+    });
+    return { id, number };
+  }
+  async updateProposal(id: string, patch: Partial<Omit<ProposalRow, 'id' | 'number'>>) {
+    const p = this.proposals.find((x) => x.id === id);
+    if (!p) return;
+    const next = { ...p, ...patch };
+    if (next.vat_mode == null && next.status !== 'draft' && next.status !== 'cancelled')
+      throw new Error('proposals_vat_before_approval');
+    Object.assign(p, patch);
+  }
+  async getProposal(id: string) {
+    return this.proposals.find((p) => p.id === id) ?? null;
+  }
+  async proposalByApproval(approvalId: string) {
+    return this.proposals.find((p) => p.approval_id === approvalId) ?? null;
+  }
+  async proposalsByStatus(statuses: ProposalStatus[], limit: number) {
+    return this.proposals.filter((p) => statuses.includes(p.status)).slice(0, limit);
+  }
+  async acceptProposal(id: string) {
+    const p = this.proposals.find((x) => x.id === id);
+    if (!p || (p.status !== 'sent' && p.status !== 'approved')) return false;
+    if (p.founder_discount) {
+      if (this.founderSlots.used >= this.founderSlots.total)
+        throw new Error('Kurucu müşteri kontenjanı dolu');
+      this.founderSlots.used++;
+    }
+    p.status = 'accepted';
+    this.events.push({ companyId: p.company_id, kind: 'proposal_accepted', summary: p.number });
+    return true;
+  }
+  async createDemo(d: {
+    company_id: string;
+    token: string;
+    snapshot: Record<string, unknown>;
+    expires_at: string;
+  }) {
+    if (d.token.length < 40) throw new Error('demo token too short');
+    const id = this.id();
+    this.demos.push({ ...d, id, status: 'active', visits: 0, messages: 0, usage: new Map() });
+    return id;
+  }
+  async activeDemo(companyId: string) {
+    const t = this.now().getTime();
+    return (
+      [...this.demos]
+        .reverse()
+        .find(
+          (d) =>
+            d.company_id === companyId && d.status === 'active' && Date.parse(d.expires_at) > t,
+        ) ?? null
+    );
+  }
+  async demoTouch(token: string, kind: 'visit' | 'message', perDemo: number, total: number) {
+    const d = this.demos.find((x) => x.token === token);
+    const out = (result: DemoTouch['result'], snapshot: Record<string, unknown> | null = null) => ({
+      result,
+      demoId: d?.id ?? null,
+      companyId: d?.company_id ?? null,
+      snapshot,
+      expiresAt: d?.expires_at ?? null,
+    });
+    if (!d) return out('not_found');
+    if (d.status !== 'active' || Date.parse(d.expires_at) <= this.now().getTime()) {
+      d.status = 'closed';
+      return out('expired');
+    }
+    if (kind === 'visit') {
+      if (d.visits === 0)
+        this.events.push({
+          companyId: d.company_id,
+          kind: 'demo_visit',
+          summary: 'Demo ilk kez açıldı',
+        });
+      d.visits++;
+      return out('ok', d.snapshot);
+    }
+    const day = this.now().toISOString().slice(0, 10);
+    const all = this.demos.reduce((n, x) => n + (x.usage.get(day) ?? 0), 0);
+    if (all >= total) return out('total_limit');
+    const used = d.usage.get(day) ?? 0;
+    if (used >= perDemo) return out('demo_limit');
+    d.usage.set(day, used + 1);
+    d.messages++;
+    return out('ok', d.snapshot);
+  }
+  async hitRateLimit(key: string, _windowSeconds: number, max: number) {
+    const n = (this.rateHits.get(key) ?? 0) + 1;
+    this.rateHits.set(key, n);
+    return n <= max;
   }
 }
 

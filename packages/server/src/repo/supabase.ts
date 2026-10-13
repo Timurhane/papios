@@ -7,6 +7,7 @@ import {
   type LLMStore,
   type LlmCallRecord,
   type QueueStore,
+  type FounderTerms,
   type Settings,
 } from '@papi/core';
 import type { DedupeKeys } from '@papi/core';
@@ -15,7 +16,14 @@ import type {
   ApprovalRow,
   CompanyPatch,
   CompanyRow,
+  DemoRow,
+  DemoTouch,
   EmbeddingTable,
+  InboxRow,
+  MeetingRow,
+  ProposalRow,
+  ProposalStatus,
+  ServicePackage,
   EnrollmentRow,
   InboxInput,
   PlaybookWithSteps,
@@ -31,6 +39,12 @@ const TOUCH_COLUMNS =
   'id, company_id, contact_id, enrollment_id, step_position, channel, recipient, subject, body, status, skip_reason, approval_id, due_at, sent_at, provider_message_id, thread_id, cold';
 const STEP_COLUMNS =
   'position, day_offset, anchor, repeat_every_days, channel, angle, conditions, requires_approval, approval_exempt_kind';
+
+const MEETING_COLUMNS =
+  'id, company_id, status, proposed_slots, starts_at, duration_minutes, calendar_event_id, notes_raw, notes, source';
+const PROPOSAL_COLUMNS =
+  'id, company_id, meeting_id, number, status, package_code, monthly_kurus, quote, founder_discount, vat_mode, valid_until, intro, scope, approval_id, pdf_path, sent_at';
+const DEMO_COLUMNS = 'id, company_id, token, status, expires_at, visits, messages';
 
 const COMPANY_COLUMNS =
   'id, name, name_norm, domain, phone_e164, website_url, instagram_handle, maps_url, emails, city, district, address, sector, source, verified, stage, score, score_rationale, next_step_kind, assigned_playbook, waiting_reason, waiting_until, last_analyzed_at';
@@ -1175,5 +1189,292 @@ export class SupabaseRepo implements Repo {
       'primary contact',
     ) as { id: string; full_name: string | null }[];
     return rows[0] ?? null;
+  }
+
+  async getInboxMessage(id: string): Promise<InboxRow | null> {
+    const r = must(
+      await this.db
+        .from('inbox_messages')
+        .select(
+          'id, company_id, touch_id, channel, provider_message_id, thread_id, from_address, subject, body, received_at, classification',
+        )
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'inbox message',
+    ) as Record<string, string | null> | null;
+    if (!r) return null;
+    return {
+      id: r.id ?? id,
+      companyId: r.company_id ?? null,
+      touchId: r.touch_id ?? null,
+      channel: 'email',
+      providerMessageId: r.provider_message_id ?? '',
+      threadId: r.thread_id ?? null,
+      from: r.from_address ?? '',
+      subject: r.subject ?? null,
+      body: r.body ?? '',
+      receivedAt: r.received_at ?? '',
+      classification: r.classification ?? 'unknown',
+    };
+  }
+
+  // --- sales -------------------------------------------------------------------------------------
+
+  async servicePackages(): Promise<ServicePackage[]> {
+    const rows = must(
+      await this.db
+        .from('service_packages')
+        .select(
+          'code, name, monthly_price_kurus, price_is_starting_from, has_payment_paths, summary, features',
+        )
+        .eq('tenant_id', this.tenantId)
+        .eq('active', true)
+        .order('position'),
+      'packages',
+    ) as {
+      code: string;
+      name: string;
+      monthly_price_kurus: number | null;
+      price_is_starting_from: boolean;
+      has_payment_paths: boolean;
+      summary: string;
+      features: string[];
+    }[];
+    return rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      monthly_kurus: r.monthly_price_kurus === null ? null : Number(r.monthly_price_kurus),
+      starting_from: r.price_is_starting_from,
+      has_payment_paths: r.has_payment_paths,
+      summary: r.summary,
+      features: r.features,
+    }));
+  }
+
+  async founderTerms(): Promise<FounderTerms | null> {
+    const r = must(
+      await this.db
+        .from('founder_discount')
+        .select(
+          'total_slots, used_slots, setup_discount_max_pct, monthly_discount_pct, monthly_discount_months',
+        )
+        .eq('tenant_id', this.tenantId)
+        .maybeSingle(),
+      'founder terms',
+    ) as {
+      total_slots: number;
+      used_slots: number;
+      setup_discount_max_pct: number;
+      monthly_discount_pct: number;
+      monthly_discount_months: number;
+    } | null;
+    if (!r) return null;
+    return {
+      slotsLeft: r.total_slots - r.used_slots,
+      setupMaxPct: r.setup_discount_max_pct,
+      setupPct: r.setup_discount_max_pct,
+      monthlyPct: r.monthly_discount_pct,
+      monthlyMonths: r.monthly_discount_months,
+    };
+  }
+
+  async contactNames(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('contacts')
+        .select('full_name')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId),
+      'contact names',
+    ) as { full_name: string | null }[];
+    return rows.map((r) => r.full_name).filter((n): n is string => !!n);
+  }
+
+  async createMeeting(
+    m: Partial<Omit<MeetingRow, 'id'>> & Pick<MeetingRow, 'company_id' | 'status'>,
+  ) {
+    return (
+      must(
+        await this.db
+          .from('meetings')
+          .insert({ ...m, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create meeting',
+      ) as { id: string }
+    ).id;
+  }
+
+  async updateMeeting(id: string, patch: Partial<Omit<MeetingRow, 'id' | 'company_id'>>) {
+    must(
+      await this.db.from('meetings').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update meeting',
+    );
+  }
+
+  async getMeeting(id: string) {
+    return must(
+      await this.db
+        .from('meetings')
+        .select(MEETING_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'get meeting',
+    ) as MeetingRow | null;
+  }
+
+  async latestMeeting(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('meetings')
+        .select(MEETING_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(1),
+      'latest meeting',
+    ) as MeetingRow[];
+    return rows[0] ?? null;
+  }
+
+  async createProposal(
+    p: Partial<Omit<ProposalRow, 'id' | 'number'>> &
+      Pick<ProposalRow, 'company_id' | 'package_code' | 'valid_until' | 'status'>,
+  ) {
+    return must(
+      await this.db
+        .from('proposals')
+        .insert({ ...p, tenant_id: this.tenantId })
+        .select('id, number')
+        .single(),
+      'create proposal',
+    ) as { id: string; number: string };
+  }
+
+  async updateProposal(id: string, patch: Partial<Omit<ProposalRow, 'id' | 'number'>>) {
+    must(
+      await this.db.from('proposals').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update proposal',
+    );
+  }
+
+  async getProposal(id: string) {
+    return this.proposalWhere('id', id);
+  }
+
+  async proposalByApproval(approvalId: string) {
+    return this.proposalWhere('approval_id', approvalId);
+  }
+
+  async proposalsByStatus(statuses: ProposalStatus[], limit: number) {
+    const rows = must(
+      await this.db
+        .from('proposals')
+        .select(PROPOSAL_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .in('status', statuses)
+        .order('created_at')
+        .limit(limit),
+      'proposals by status',
+    ) as ProposalRow[];
+    return rows.map((r) => ({
+      ...r,
+      monthly_kurus: r.monthly_kurus === null ? null : Number(r.monthly_kurus),
+    }));
+  }
+
+  private async proposalWhere(column: 'id' | 'approval_id', value: string) {
+    const r = must(
+      await this.db
+        .from('proposals')
+        .select(PROPOSAL_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq(column, value)
+        .maybeSingle(),
+      'get proposal',
+    ) as ProposalRow | null;
+    return r
+      ? { ...r, monthly_kurus: r.monthly_kurus === null ? null : Number(r.monthly_kurus) }
+      : null;
+  }
+
+  async acceptProposal(id: string) {
+    return must(
+      await this.db.schema('app').rpc('accept_proposal', { p_id: id }),
+      'accept proposal',
+    ) as boolean;
+  }
+
+  async createDemo(d: {
+    company_id: string;
+    token: string;
+    snapshot: Record<string, unknown>;
+    expires_at: string;
+  }) {
+    return (
+      must(
+        await this.db
+          .from('demos')
+          .insert({ ...d, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create demo',
+      ) as { id: string }
+    ).id;
+  }
+
+  async activeDemo(companyId: string) {
+    const rows = must(
+      await this.db
+        .from('demos')
+        .select(DEMO_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1),
+      'active demo',
+    ) as DemoRow[];
+    return rows[0] ?? null;
+  }
+
+  async demoTouch(token: string, kind: 'visit' | 'message', perDemo: number, total: number) {
+    const rows = must(
+      await this.db.schema('app').rpc('demo_touch', {
+        p_token: token,
+        p_kind: kind,
+        p_per_demo: perDemo,
+        p_total: total,
+      }),
+      'demo touch',
+    ) as {
+      result: DemoTouch['result'];
+      demo_id: string | null;
+      company_id: string | null;
+      snapshot: Record<string, unknown> | null;
+      expires_at: string | null;
+    }[];
+    const r = rows[0];
+    return {
+      result: r?.result ?? 'not_found',
+      demoId: r?.demo_id ?? null,
+      companyId: r?.company_id ?? null,
+      snapshot: r?.snapshot ?? null,
+      expiresAt: r?.expires_at ?? null,
+    };
+  }
+
+  async hitRateLimit(key: string, windowSeconds: number, max: number) {
+    return must(
+      await this.db.schema('app').rpc('hit_rate_limit', {
+        p_key: key,
+        p_window_seconds: windowSeconds,
+        p_max: max,
+      }),
+      'rate limit',
+    ) as boolean;
   }
 }

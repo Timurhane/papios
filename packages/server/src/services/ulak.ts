@@ -724,6 +724,12 @@ export async function processInbound(deps: OutreachDeps, mails: InboundMail[]): 
         waiting_reason: 'Cevap verdi; Timurhan dönüş yapacak',
         waiting_until: today,
       });
+      // Satıcı drafts an answer (redacted input, K-4.9); it arrives in the approval queue.
+      await deps.repo.enqueue(
+        'satici.reply_draft',
+        { inboxId: stored },
+        { unique: true, priority: 5 },
+      );
       const excerpt = stripQuoted(m.body).slice(0, 400);
       await deps.notify?.(
         'hot_reply',

@@ -1,4 +1,14 @@
-import type { Channel, DedupeKeys, LLMStore, PlaybookStep, QueueStore, Settings } from '@papi/core';
+import type {
+  Channel,
+  DedupeKeys,
+  FounderDiscount,
+  FounderTerms,
+  LLMStore,
+  PlaybookStep,
+  QueueStore,
+  Settings,
+  VatMode,
+} from '@papi/core';
 
 export interface KnowledgeHit {
   id: string;
@@ -154,6 +164,90 @@ export interface InboxInput {
   body: string;
   receivedAt: string;
   classification: string;
+}
+
+export interface ServicePackage {
+  code: string;
+  name: string;
+  monthly_kurus: number | null;
+  starting_from: boolean;
+  has_payment_paths: boolean;
+  summary: string;
+  features: string[];
+}
+
+/** Structured meeting note, produced from the redacted text only (K-4.9). */
+export interface MeetingNotes {
+  summary: string;
+  needs: string[];
+  budget_signal: string | null;
+  objections: string[];
+  next_step: string | null;
+  suggested_package: string | null;
+}
+
+export interface MeetingRow {
+  id: string;
+  company_id: string;
+  status: 'proposed' | 'scheduled' | 'done' | 'cancelled' | 'no_show';
+  proposed_slots: string[];
+  starts_at: string | null;
+  duration_minutes: number;
+  calendar_event_id: string | null;
+  notes_raw: string | null;
+  notes: MeetingNotes | null;
+  source: 'telegram_voice' | 'telegram_text' | 'panel' | null;
+}
+
+export type ProposalStatus =
+  | 'draft'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'sent'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
+
+export interface ProposalRow {
+  id: string;
+  company_id: string;
+  meeting_id: string | null;
+  number: string;
+  status: ProposalStatus;
+  package_code: string;
+  monthly_kurus: number | null;
+  quote: Record<string, unknown>;
+  founder_discount: FounderDiscount | null;
+  vat_mode: VatMode | null;
+  valid_until: string;
+  intro: string | null;
+  scope: string[];
+  approval_id: string | null;
+  pdf_path: string | null;
+  sent_at: string | null;
+}
+
+export interface DemoRow {
+  id: string;
+  company_id: string;
+  token: string;
+  status: 'active' | 'closed';
+  expires_at: string;
+  visits: number;
+  messages: number;
+}
+
+export interface DemoTouch {
+  result: 'ok' | 'not_found' | 'expired' | 'demo_limit' | 'total_limit';
+  demoId: string | null;
+  companyId: string | null;
+  snapshot: Record<string, unknown> | null;
+  expiresAt: string | null;
+}
+
+export interface InboxRow extends InboxInput {
+  id: string;
 }
 
 /** Everything the Worker reads or writes, scoped to one tenant. */
@@ -315,4 +409,40 @@ export interface Repo {
     companyId: string,
   ): Promise<{ findings: string[]; strongest_finding: string | null } | null>;
   primaryContact(companyId: string): Promise<{ id: string; full_name: string | null } | null>;
+  getInboxMessage(id: string): Promise<InboxRow | null>;
+
+  // --- Sales (Phase 4) ---
+  servicePackages(): Promise<ServicePackage[]>;
+  founderTerms(): Promise<FounderTerms | null>;
+  /** Names of the company's contacts, used only to redact them (K-4.9). */
+  contactNames(companyId: string): Promise<string[]>;
+  createMeeting(
+    m: Partial<Omit<MeetingRow, 'id'>> & Pick<MeetingRow, 'company_id' | 'status'>,
+  ): Promise<string>;
+  updateMeeting(id: string, patch: Partial<Omit<MeetingRow, 'id' | 'company_id'>>): Promise<void>;
+  getMeeting(id: string): Promise<MeetingRow | null>;
+  latestMeeting(companyId: string): Promise<MeetingRow | null>;
+  createProposal(
+    p: Partial<Omit<ProposalRow, 'id' | 'number'>> &
+      Pick<ProposalRow, 'company_id' | 'package_code' | 'valid_until' | 'status'>,
+  ): Promise<{ id: string; number: string }>;
+  updateProposal(id: string, patch: Partial<Omit<ProposalRow, 'id' | 'number'>>): Promise<void>;
+  getProposal(id: string): Promise<ProposalRow | null>;
+  proposalByApproval(approvalId: string): Promise<ProposalRow | null>;
+  proposalsByStatus(statuses: ProposalStatus[], limit: number): Promise<ProposalRow[]>;
+  acceptProposal(id: string): Promise<boolean>;
+  createDemo(d: {
+    company_id: string;
+    token: string;
+    snapshot: Record<string, unknown>;
+    expires_at: string;
+  }): Promise<string>;
+  activeDemo(companyId: string): Promise<DemoRow | null>;
+  demoTouch(
+    token: string,
+    kind: 'visit' | 'message',
+    perDemo: number,
+    total: number,
+  ): Promise<DemoTouch>;
+  hitRateLimit(key: string, windowSeconds: number, max: number): Promise<boolean>;
 }

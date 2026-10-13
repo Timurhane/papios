@@ -118,4 +118,52 @@ describe.skipIf(!url || !key)('SupabaseRepo against real Supabase', () => {
     await r.recordError('it', 'warning', tag);
     expect(await r.getFlag('client_portal')).toBe(false);
   });
+
+  it('sales: packages, numbered proposals, acceptance, demos and rate limits', async () => {
+    const r = repo();
+    expect((await r.servicePackages()).map((p) => p.code)).toEqual([
+      'refleks',
+      'sistem',
+      'operasyon',
+      'ozel',
+    ]);
+    expect((await r.founderTerms())?.setupMaxPct).toBe(40);
+    const companyId = await r.createCompany({
+      name: `IT ${tag}`,
+      name_norm: `it ${tag}`,
+      source: 'manual',
+    });
+    await r.updateCompany(companyId, {
+      next_step_kind: 'waiting',
+      waiting_reason: 'it',
+      waiting_until: '2030-01-01',
+    });
+    const p = await r.createProposal({
+      company_id: companyId,
+      package_code: 'sistem',
+      monthly_kurus: 2_550_000,
+      status: 'draft',
+      valid_until: '2030-01-01',
+      scope: ['a'],
+    });
+    expect(p.number).toMatch(/^AJNA-\d{4}-\d{4}$/);
+    await r.updateProposal(p.id, { vat_mode: 'excluded', status: 'sent' });
+    expect((await r.getProposal(p.id))?.monthly_kurus).toBe(2_550_000);
+    expect((await r.proposalsByStatus(['sent'], 50)).some((x) => x.id === p.id)).toBe(true);
+    expect(await r.acceptProposal(p.id)).toBe(true);
+
+    const token = `${tag}`.padEnd(43, 'x');
+    await r.createDemo({
+      company_id: companyId,
+      token,
+      snapshot: { name: 'IT' },
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    expect((await r.activeDemo(companyId))?.token).toBe(token);
+    expect((await r.demoTouch(token, 'visit', 1, 100)).snapshot).toEqual({ name: 'IT' });
+    expect((await r.demoTouch(token, 'message', 1, 100)).result).toBe('ok');
+    expect((await r.demoTouch(token, 'message', 1, 100)).result).toBe('demo_limit');
+    expect(await r.hitRateLimit(`it:${tag}`, 60, 1)).toBe(true);
+    expect(await r.hitRateLimit(`it:${tag}`, 60, 1)).toBe(false);
+  });
 });
