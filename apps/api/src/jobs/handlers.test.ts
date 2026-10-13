@@ -55,3 +55,74 @@ describe('job handlers', () => {
     expect(scheduledJobs(new Date('2026-10-13T10:16:00Z'))).toEqual([]);
   });
 });
+
+describe('Phase 2 acceptance: Telegram link → analysed card', () => {
+  it('a queued link becomes a scored company and a Telegram card in one cron tick', async () => {
+    const ctx = setup([
+      JSON.stringify({
+        results: [
+          {
+            id: 'ID',
+            sector: 'Diş kliniği',
+            city: 'Balıkesir',
+            findings: [
+              'Randevular telefonla alınıyor olabilir.',
+              'WhatsApp yok, sorular gecikebilir.',
+              'Mobil site yavaş, ziyaretçi kaçabilir.',
+            ],
+            strongest_finding: 'Mobil site yavaş olduğu için randevu talepleri kaçıyor olabilir.',
+          },
+        ],
+      }),
+    ]);
+    const html =
+      '<title>Örnek Diş Kliniği</title><p>Karesi/Balıkesir</p><a href="tel:02661234567">t</a>';
+    const fetchFn = (async (input: string) => {
+      const url = String(input);
+      if (url.includes('pagespeedonline'))
+        return new Response(
+          JSON.stringify({ lighthouseResult: { categories: { performance: { score: 0.3 } } } }),
+        );
+      if (!url.startsWith('https://ornekdis.com')) throw new Error('offline');
+      const res = new Response(html, { headers: { 'content-type': 'text/html' } });
+      Object.defineProperty(res, 'url', { value: 'https://ornekdis.com/' });
+      return res;
+    }) as unknown as typeof fetch;
+    // The scripted summary must carry the real company id: patch it in once the company exists.
+    const realGenerate = ctx.llm.generateStructured.bind(ctx.llm);
+    ctx.llm.generateStructured = (async (req: Parameters<typeof realGenerate>[0]) => {
+      const id = ctx.repo.companies[0]?.id ?? 'ID';
+      req.messages = req.messages.map((m) => ({ ...m }));
+      const out = await realGenerate(req);
+      return { ...out, data: JSON.parse(JSON.stringify(out.data).replaceAll('"ID"', `"${id}"`)) };
+    }) as typeof ctx.llm.generateStructured;
+
+    await ctx.repo.enqueue('lead.add_from_link', { url: 'https://ornekdis.com/' });
+    const started = Date.now();
+    await dispatch({
+      store: ctx.repo.queueStore,
+      registry: buildRegistry({
+        repo: ctx.repo,
+        llm: ctx.llm,
+        tg: ctx.tg,
+        ownerChatId: OWNER,
+        fetchFn,
+        panelUrl: 'https://papi.pages.dev',
+      }),
+      worker: 'test',
+      limit: 1,
+    });
+    expect(Date.now() - started).toBeLessThan(5 * 60_000);
+    const company = ctx.repo.companies[0];
+    expect(company).toMatchObject({
+      name: 'Örnek Diş Kliniği',
+      stage: 'analyzed',
+      next_step_kind: 'playbook',
+    });
+    expect(['soguk_ana', 'hafif_soguk']).toContain(company?.assigned_playbook);
+    expect(ctx.tg.texts().at(-1)).toContain('Örnek Diş Kliniği');
+    expect(ctx.tg.texts().at(-1)).toMatch(/\/100 → (Soğuk Ana|Hafif Soğuk)/);
+    expect(ctx.tg.texts().at(-1)).toContain('Mobil site yavaş olduğu için');
+    expect(ctx.tg.texts().at(-1)).toContain(`https://papi.pages.dev/crm/${company?.id}`);
+  });
+});

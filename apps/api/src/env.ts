@@ -15,6 +15,23 @@ export const envSchema = z.object({
   GEMINI_API_KEY: optionalSecret,
   GROQ_API_KEY: optionalSecret,
   ANTHROPIC_API_KEY: optionalSecret,
+  /** Optional; PageSpeed works without a key but is heavily throttled. */
+  PAGESPEED_API_KEY: optionalSecret,
+  /** Panel base URL for links in Telegram cards. */
+  PANEL_URL: z.url().optional(),
+  /** Instagram business discovery (K-8.4); off until both are set. */
+  IG_BUSINESS_ACCOUNT_ID: optionalSecret,
+  IG_ACCESS_TOKEN: optionalSecret,
+  IG_GRAPH_VERSION: z
+    .string()
+    .regex(/^v\d+\.\d+$/)
+    .optional(),
+  /** Optional fine-grained GitHub token (actions:write) to start the heavy-jobs workflow immediately. */
+  GITHUB_DISPATCH_TOKEN: optionalSecret,
+  GITHUB_REPOSITORY: z
+    .string()
+    .regex(/^[\w.-]+\/[\w.-]+$/)
+    .optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

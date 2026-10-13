@@ -6,3 +6,4 @@ export * from './services/analist.ts';
 export * from './services/kasif.ts';
 export * from './adapters/instagram.ts';
 export * from './adapters/places.ts';
+export * from './telegram-client.ts';

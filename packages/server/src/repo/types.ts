@@ -150,7 +150,7 @@ export interface Repo {
   enqueue(
     type: string,
     payload: Record<string, unknown>,
-    opts?: { heavy?: boolean; runAfter?: Date; unique?: boolean },
+    opts?: { heavy?: boolean; runAfter?: Date; unique?: boolean; priority?: number },
   ): Promise<string | null>;
 
   recordError(
@@ -198,4 +198,6 @@ export interface Repo {
   addMemory(subjectId: string, kind: 'analysis' | 'note', content: string): Promise<void>;
   activeSignals(companyId: string): Promise<string[]>;
   companiesAwaitingAnalysis(limit: number): Promise<CompanyRow[]>;
+  searchCompanies(query: string, limit: number): Promise<CompanyRow[]>;
+  countQueuedJobs(heavy: boolean): Promise<number>;
 }

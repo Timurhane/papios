@@ -339,7 +339,7 @@ export class SupabaseRepo implements Repo {
   async enqueue(
     type: string,
     payload: Record<string, unknown>,
-    opts: { heavy?: boolean; runAfter?: Date; unique?: boolean } = {},
+    opts: { heavy?: boolean; runAfter?: Date; unique?: boolean; priority?: number } = {},
   ) {
     if (opts.unique) {
       const existing = must(
@@ -362,6 +362,7 @@ export class SupabaseRepo implements Repo {
           type,
           payload,
           heavy: opts.heavy ?? false,
+          ...(opts.priority !== undefined ? { priority: opts.priority } : {}),
           ...(opts.runAfter ? { run_after: opts.runAfter.toISOString() } : {}),
         })
         .select('id')
@@ -747,5 +748,30 @@ export class SupabaseRepo implements Repo {
         .limit(limit),
       'awaiting analysis',
     ) as unknown as CompanyRow[];
+  }
+
+  async searchCompanies(query: string, limit: number) {
+    const q = query.replace(/[%,()]/g, ' ').trim();
+    return must(
+      await this.db
+        .from('companies')
+        .select(COMPANY_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .or(`name.ilike.%${q}%,domain.ilike.%${q}%,instagram_handle.ilike.%${q}%`)
+        .order('score', { ascending: false, nullsFirst: false })
+        .limit(limit),
+      'search companies',
+    ) as unknown as CompanyRow[];
+  }
+
+  async countQueuedJobs(heavy: boolean) {
+    const res = await this.db
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', this.tenantId)
+      .eq('status', 'queued')
+      .eq('heavy', heavy);
+    if (res.error) throw new Error(`count jobs: ${res.error.message}`);
+    return res.count ?? 0;
   }
 }

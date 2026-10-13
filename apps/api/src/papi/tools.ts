@@ -74,11 +74,78 @@ export function papiTools(repo: Repo, llm: LLMService): AgentTool<unknown>[] {
     defineTool({
       name: 'queue_lead_link',
       description:
-        "Bir işletmenin linkini (site, Instagram, harita) aday olarak kuyruğa ekler. Analiz Faz 2'de çalışır.",
+        'Bir işletmenin linkini (site, Instagram, harita) aday olarak ekler; analiz edilip puanlanır.',
       argsHint: '{"url": "https://..."}',
       args: z.object({ url: z.url() }),
       run: async ({ url }) => {
-        await repo.enqueue('lead.add_from_link', { url, source: 'telegram' }, { heavy: true });
+        await repo.enqueue('lead.add_from_link', { url, source: 'telegram' }, { priority: 10 });
+        return { queued: true, note: "Analiz kartı 1–2 dakika içinde Telegram'a gelecek." };
+      },
+    }),
+    defineTool({
+      name: 'add_lead_by_name',
+      description: 'İşletme adıyla aday ekler; sitesini arayıp doğrular, sonra analiz eder.',
+      argsHint: '{"name": "işletme adı", "city": "il (isteğe bağlı)"}',
+      args: z.object({
+        name: z.string().min(2).max(120),
+        city: z.string().min(2).max(40).optional(),
+      }),
+      run: async ({ name, city }) => {
+        await repo.enqueue('lead.add_by_name', { name, city: city ?? null }, { priority: 10 });
+        return { queued: true };
+      },
+    }),
+    defineTool({
+      name: 'find_company',
+      description: "CRM'de firma arar (ad, alan adı veya Instagram) ve puan/aşama bilgisini verir.",
+      argsHint: '{"query": "aranacak ifade"}',
+      args: z.object({ query: z.string().min(2).max(100) }),
+      run: async ({ query }) =>
+        (await repo.searchCompanies(query, 5)).map((c) => ({
+          name: c.name,
+          score: c.score,
+          stage: c.stage,
+          next: c.next_step_kind === 'playbook' ? c.assigned_playbook : c.waiting_reason,
+          city: c.city,
+        })),
+    }),
+    defineTool({
+      name: 'start_lead_search',
+      description:
+        'Web aramasıyla yeni aday bulur (ör. "Balıkesir\'deki diş klinikleri"); sitesi doğrulananlar CRM\'e girer.',
+      argsHint: '{"query": "arama cümlesi"}',
+      args: z.object({ query: z.string().min(5).max(200) }),
+      run: async ({ query }) => {
+        await repo.enqueue('kasif.grounded_search', { query }, { heavy: true });
+        return {
+          queued: true,
+          note: "Arama arka planda çalışacak; sonuçlar CRM'e düşünce bildireceğim.",
+        };
+      },
+    }),
+    defineTool({
+      name: 'start_osm_search',
+      description: "OpenStreetMap'te bir ildeki işletmeleri sektöre göre arar.",
+      argsHint:
+        '{"area": "il adı", "sectors": ["clinic","real_estate","auto","hotel","education","construction","manufacturing"]}',
+      args: z.object({
+        area: z.string().min(2).max(60),
+        sectors: z
+          .array(
+            z.enum([
+              'clinic',
+              'real_estate',
+              'auto',
+              'hotel',
+              'education',
+              'construction',
+              'manufacturing',
+            ]),
+          )
+          .min(1),
+      }),
+      run: async ({ area, sectors }) => {
+        await repo.enqueue('kasif.osm_search', { area, sectors }, { heavy: true });
         return { queued: true };
       },
     }),

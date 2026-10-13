@@ -6,7 +6,7 @@ import {
   type TgUpdate,
 } from '@papi/core';
 import { MemoryRepo } from '@papi/server';
-import type { SendOptions, TelegramApi } from '../telegram/client.ts';
+import type { SendOptions, TelegramApi } from '@papi/server';
 
 export const OWNER = 4242;
 export const STRANGER = 9999;

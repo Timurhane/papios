@@ -51,14 +51,14 @@ describe('commands', () => {
     expect(inputs).toHaveLength(0);
   });
 
-  it('/ekle queues a heavy lead job and rejects bad links', async () => {
+  it('/ekle queues a lead job and rejects bad links', async () => {
     const { deps, tg, repo } = setup();
     await handleUpdate(textUpdate(OWNER, '/ekle notalink'), deps);
     expect(repo.jobs).toHaveLength(0);
     await handleUpdate(textUpdate(OWNER, '/ekle https://www.ornekklinik.com/'), deps);
     expect(repo.jobs[0]).toMatchObject({
       type: 'lead.add_from_link',
-      heavy: true,
+      heavy: false,
       payload: { url: 'https://www.ornekklinik.com/' },
     });
     expect(tg.texts()[1]).toContain('ornekklinik.com');
@@ -79,6 +79,14 @@ describe('commands', () => {
     await handleUpdate(textUpdate(OWNER, '/uyandım'), deps);
     expect(repo.state.get('quiet_mode')).toMatchObject({ on: false });
     expect(tg.texts().at(-1)).toContain('Günlük rapor hazır');
+  });
+
+  it('a bare link is treated as a lead without calling a model (K-2.3)', async () => {
+    const { deps, tg, repo, inputs } = setup();
+    await handleUpdate(textUpdate(OWNER, 'ornekklinik.com'), deps);
+    expect(repo.jobs[0]).toMatchObject({ type: 'lead.add_from_link' });
+    expect(inputs).toHaveLength(0);
+    expect(tg.texts()[0]).toContain('kuyruğa alındı');
   });
 
   it('/kota lists buckets', async () => {

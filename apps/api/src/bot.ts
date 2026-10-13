@@ -17,7 +17,7 @@ import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
 import type { ApprovalRow, Repo } from '@papi/server';
-import type { TelegramApi } from './telegram/client.ts';
+import type { TelegramApi } from '@papi/server';
 
 export interface BotDeps {
   repo: Repo;
@@ -118,6 +118,13 @@ async function handleText(text: string, chatId: number, deps: BotDeps, fromVoice
     return;
   }
 
+  // Rule before model (K-2.3): a bare link is a lead, no LLM needed.
+  const bare = bareUrl(text);
+  if (bare && !fromVoice) {
+    await queueLink(bare, chatId, deps);
+    return;
+  }
+
   const settings = await deps.repo.getSettings();
   const history = await deps.repo.recentConversation('telegram', HISTORY_MESSAGES);
   await deps.tg.sendChatAction(chatId, 'typing');
@@ -207,16 +214,7 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
         );
         return;
       }
-      await repo.enqueue(
-        'lead.add_from_link',
-        { url: url.toString(), source: 'telegram' },
-        { heavy: true },
-      );
-      await repo.audit('lead.link_queued', { host: url.hostname }, { type: 'agent', id: 'papi' });
-      await tg.sendMessage(
-        chatId,
-        `Kuyruğa ekledim: ${url.hostname}\nAnaliz ve puanlama Faz 2'de devreye girince bu link otomatik işlenecek.`,
-      );
+      await queueLink(url, chatId, deps);
       return;
     }
 
@@ -389,4 +387,29 @@ async function applyCorrection(
   });
   await deps.repo.enqueue('approval.revise', { approvalId });
   await deps.tg.sendMessage(chatId, 'Not aldım. Taslağı düzeltip tekrar onayına sunacağım.');
+}
+
+function bareUrl(text: string): URL | null {
+  const t = text.trim();
+  if (/\s/.test(t)) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+    return /^https?:$/.test(u.protocol) && u.hostname.includes('.') ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+/** K-8.6: queue the link; the cron worker analyses it within a minute and sends the card. */
+async function queueLink(url: URL, chatId: number, deps: BotDeps) {
+  await deps.repo.enqueue(
+    'lead.add_from_link',
+    { url: url.toString(), source: 'telegram' },
+    { priority: 10 },
+  );
+  await deps.repo.audit('lead.link_queued', { host: url.hostname }, { type: 'agent', id: 'papi' });
+  await deps.tg.sendMessage(
+    chatId,
+    `🔎 ${url.hostname} kuyruğa alındı. Analiz ve puan 1–2 dakika içinde gelecek.`,
+  );
 }

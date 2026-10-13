@@ -155,7 +155,7 @@ export class MemoryRepo implements Repo {
   async enqueue(
     type: string,
     payload: Record<string, unknown>,
-    opts: { heavy?: boolean; unique?: boolean } = {},
+    opts: { heavy?: boolean; unique?: boolean; priority?: number } = {},
   ) {
     if (
       opts.unique &&
@@ -302,6 +302,19 @@ export class MemoryRepo implements Repo {
   }
   async activeSignals(companyId: string) {
     return this.signalsByCompany.get(companyId) ?? [];
+  }
+  async searchCompanies(query: string, limit: number) {
+    const q = query.toLocaleLowerCase('tr');
+    return this.companies
+      .filter((c) =>
+        `${c.name} ${c.domain ?? ''} ${c.instagram_handle ?? ''}`
+          .toLocaleLowerCase('tr')
+          .includes(q),
+      )
+      .slice(0, limit);
+  }
+  async countQueuedJobs(heavy: boolean) {
+    return this.jobs.filter((j) => j.status === 'queued' && j.heavy === heavy).length;
   }
   async companiesAwaitingAnalysis(limit: number) {
     return this.companies.filter((c) => c.stage === 'new').slice(0, limit);

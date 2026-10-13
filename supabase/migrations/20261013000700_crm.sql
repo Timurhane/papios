@@ -158,7 +158,7 @@ create trigger companies_audit after insert or update or delete on public.compan
 create trigger contacts_audit after insert or update or delete on public.contacts
   for each row execute function app.audit_row_change();
 
--- Panel CSV import: queues rows for the Worker, which normalizes and de-duplicates them (single path).
+-- Panel CSV import: queues rows for the Actions worker, which normalizes and de-duplicates them (single path).
 create function app.enqueue_csv_import(p_tenant_id uuid, p_rows jsonb)
 returns uuid
 language plpgsql
@@ -174,8 +174,9 @@ begin
   if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 2000 then
     raise exception 'rows must be an array of at most 2000 items';
   end if;
-  insert into public.jobs (tenant_id, type, payload)
-  values (p_tenant_id, 'kasif.csv_import', jsonb_build_object('rows', p_rows))
+  -- heavy: bulk rows run in the Actions worker (Workers free plan: 50 subrequests per invocation)
+  insert into public.jobs (tenant_id, type, payload, heavy)
+  values (p_tenant_id, 'kasif.csv_import', jsonb_build_object('rows', p_rows), true)
   returning id into v_id;
   return v_id;
 end;
