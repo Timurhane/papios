@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { usePanelApi } from '@/data/PanelApiContext';
 import type { CompanyDetail } from '@/data/types';
 import { useAsync } from '@/data/useAsync';
+import { CompanySalesCard } from '@/sales/CompanySalesCard';
 import { formatDate, nextStepText, STAGE_LABEL } from './labels';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -33,6 +34,7 @@ export function CompanyPage() {
       )}
       {!loading && !data && !error && <p className="text-muted">Firma bulunamadı.</p>}
       {data && <CompanyCard company={data} onChanged={reload} />}
+      {data && <CompanySalesCard companyId={data.id} />}
     </section>
   );
 }

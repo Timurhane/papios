@@ -78,6 +78,8 @@ export function TodayPage() {
             <OneClickList items={data.calls} empty="Bugün arama/ziyaret yok." onDone={reload} />
           </Card>
 
+          <UpcomingMeetings />
+
           <Card>
             <h2 className="mb-3 font-semibold">Son 24 saatte analiz edilenler</h2>
             <CompanyRows
@@ -129,5 +131,31 @@ function CompanyRows({ items, empty }: { items: CompanySummary[]; empty: string 
         </li>
       ))}
     </ul>
+  );
+}
+
+function UpcomingMeetings() {
+  const api = usePanelApi();
+  const { data } = useAsync(() => api.upcomingMeetings(), 'meetings');
+  return (
+    <Card>
+      <h2 className="mb-3 font-semibold">Yaklaşan görüşmeler ({data?.length ?? 0})</h2>
+      {!data || data.length === 0 ? (
+        <p className="text-sm text-muted">Planlanmış görüşme yok.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {data.map((m) => (
+            <li key={m.id} className="flex items-center justify-between gap-2">
+              <Link to={`/crm/${m.company_id}`} className="min-w-0 truncate hover:underline">
+                {m.company_name}
+              </Link>
+              <span className="text-xs text-muted">
+                {m.starts_at ? formatDateTime(m.starts_at) : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }

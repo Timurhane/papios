@@ -6,11 +6,22 @@ import { CrmPage } from '@/crm/CrmPage';
 import { panelModules } from '@/modules';
 import { InboxPage } from '@/outreach/InboxPage';
 import { PlaybooksPage } from '@/outreach/PlaybooksPage';
+import { NewProposalPage } from '@/proposals/NewProposalPage';
+import { ProposalPage } from '@/proposals/ProposalPage';
+import { ProposalsPage } from '@/proposals/ProposalsPage';
+import { DemosPage } from '@/sales/DemosPage';
 import { TodayPage } from '@/today/TodayPage';
 import { ModulePlaceholder } from '@/pages/ModulePlaceholder';
 import { NotFound } from '@/pages/NotFound';
 
-const IMPLEMENTED = new Set(['/', '/crm', '/gelen-kutusu', '/playbooklar']);
+const IMPLEMENTED = new Set([
+  '/',
+  '/crm',
+  '/gelen-kutusu',
+  '/playbooklar',
+  '/teklifler',
+  '/demolar',
+]);
 
 export function App() {
   return (
@@ -22,6 +33,10 @@ export function App() {
           <Route path="/crm/:id" element={<CompanyPage />} />
           <Route path="/gelen-kutusu" element={<InboxPage />} />
           <Route path="/playbooklar" element={<PlaybooksPage />} />
+          <Route path="/teklifler" element={<ProposalsPage />} />
+          <Route path="/teklifler/yeni" element={<NewProposalPage />} />
+          <Route path="/teklifler/:id" element={<ProposalPage />} />
+          <Route path="/demolar" element={<DemosPage />} />
           {panelModules
             .filter((m) => !IMPLEMENTED.has(m.path))
             .map((m) => (

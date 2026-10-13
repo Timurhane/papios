@@ -1,5 +1,14 @@
+import { defaultSettings, quotePaths } from '@papi/core';
 import type {
   ApprovalEdit,
+  CompanySales,
+  DemoSummary,
+  MeetingSummary,
+  NewProjectProposal,
+  ProposalDetail,
+  ProposalPatch,
+  SalesContext,
+  WorkerAction,
   ApprovalItem,
   CompanyDetail,
   CompanySummary,
@@ -262,5 +271,175 @@ export class FakePanelApi implements PanelApi {
   }
   async listPlaybooks() {
     return this.playbooks;
+  }
+
+  // --- sales ---
+  context: SalesContext = {
+    packages: [
+      {
+        code: 'refleks',
+        name: 'Refleks',
+        monthly_kurus: 1_750_000,
+        starting_from: false,
+        has_payment_paths: true,
+        summary: 'Gelen her mesaja anında cevap ve takip.',
+        features: ['Anında cevap'],
+      },
+      {
+        code: 'sistem',
+        name: 'Sistem',
+        monthly_kurus: 2_550_000,
+        starting_from: false,
+        has_payment_paths: true,
+        summary: "Refleks'in tamamı + satış, randevu ve yorum otomasyonları.",
+        features: ['Teklif takibi'],
+      },
+      {
+        code: 'ozel',
+        name: 'Özel',
+        monthly_kurus: null,
+        starting_from: true,
+        has_payment_paths: false,
+        summary: 'Pakete sığmayan işler.',
+        features: [],
+      },
+    ],
+    pricing: {
+      ...defaultSettings.pricing,
+      custom_project: {
+        ...defaultSettings.pricing.custom_project,
+        daily_rate_kurus: 1_000_000,
+        uncertainty_pct: 20,
+      },
+    },
+    founder: { slotsLeft: 2, setupMaxPct: 40, setupPct: 40, monthlyPct: 20, monthlyMonths: 3 },
+    vatDefault: 'unspecified',
+    validDays: 14,
+  };
+  proposals: ProposalDetail[] = [
+    {
+      id: 'p1',
+      number: 'AJNA-2026-0001',
+      status: 'draft',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      package_code: 'sistem',
+      monthly_kurus: 2_550_000,
+      valid_until: '2026-10-27',
+      created_at: '2026-10-13T09:00:00Z',
+      quote: {
+        kind: 'paths',
+        ...quotePaths(2_550_000, defaultSettings.pricing, {
+          setupPct: 40,
+          monthlyPct: 20,
+          monthlyMonths: 3,
+        }),
+      },
+      founder_discount: { setupPct: 40, monthlyPct: 20, monthlyMonths: 3 },
+      vat_mode: null,
+      intro: 'Gece gelen mesajlar sabaha kalmasın.',
+      scope: ['Instagram mesajlarına anında cevap'],
+      pdf_path: null,
+      sent_at: null,
+      approval_id: null,
+      company_phone: '902661234567',
+    },
+  ];
+  pdfs: { id: string; size: number }[] = [];
+  demos: DemoSummary[] = [
+    {
+      id: 'd1',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      url: 'https://api.test/demo/abc',
+      status: 'active',
+      expires_at: '2026-10-27T09:00:00Z',
+      visits: 3,
+      messages: 5,
+    },
+  ];
+  meetings: MeetingSummary[] = [
+    {
+      id: 'mt1',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      status: 'scheduled',
+      starts_at: '2026-10-15T11:00:00Z',
+      summary: null,
+    },
+  ];
+  workerCalls: { action: WorkerAction; body: Record<string, unknown> }[] = [];
+  workerReplies: Partial<Record<WorkerAction, Record<string, unknown>>> = {};
+  hasWorker = true;
+
+  async salesContext() {
+    return this.context;
+  }
+  async listProposals() {
+    return this.proposals;
+  }
+  async getProposal(id: string) {
+    return this.proposals.find((p) => p.id === id) ?? null;
+  }
+  async updateProposal(id: string, patch: ProposalPatch) {
+    const p = this.proposals.find((x) => x.id === id);
+    if (p) Object.assign(p, patch);
+  }
+  async createProjectProposal(p: NewProjectProposal) {
+    const id = `p${this.proposals.length + 1}`;
+    const [template] = this.proposals;
+    if (!template) throw new Error('fake needs a template proposal');
+    this.proposals.push({
+      ...template,
+      id,
+      number: `AJNA-2026-000${this.proposals.length + 1}`,
+      company_id: p.companyId,
+      package_code: 'ozel',
+      monthly_kurus: null,
+      quote: p.quote,
+      founder_discount: null,
+      vat_mode: p.vatMode,
+      intro: p.intro,
+      scope: p.scope,
+      valid_until: p.validUntil,
+    });
+    return id;
+  }
+  async saveProposalPdf(id: string, pdf: Uint8Array) {
+    this.pdfs.push({ id, size: pdf.length });
+    const p = this.proposals.find((x) => x.id === id);
+    if (p) p.pdf_path = `t/${id}.pdf`;
+    return `t/${id}.pdf`;
+  }
+  async proposalPdfUrl(path: string) {
+    return `https://storage.test/${path}?token=x`;
+  }
+  async listDemos() {
+    return this.demos;
+  }
+  async upcomingMeetings() {
+    return this.meetings.filter((m) => m.status === 'scheduled');
+  }
+  async companySales(companyId: string): Promise<CompanySales> {
+    return {
+      meetings: this.meetings.filter((m) => m.company_id === companyId),
+      proposals: this.proposals.filter((p) => p.company_id === companyId),
+      demos: this.demos.filter((d) => d.company_id === companyId),
+    };
+  }
+  workerAvailable() {
+    return this.hasWorker;
+  }
+  async worker<T = Record<string, unknown>>(action: WorkerAction, body: Record<string, unknown>) {
+    this.workerCalls.push({ action, body });
+    const p = this.proposals.find((x) => x.id === body.proposalId);
+    if (action === 'proposal.vat' && p) {
+      p.vat_mode = body.mode as 'included' | 'excluded';
+      p.status = 'awaiting_approval';
+    }
+    if (action === 'proposal.submit' && p) p.status = 'awaiting_approval';
+    if (action === 'proposal.sent' && p) p.status = 'sent';
+    if (action === 'proposal.close' && p) p.status = body.outcome as 'accepted' | 'rejected';
+    return (this.workerReplies[action] ?? { ok: true }) as T;
   }
 }

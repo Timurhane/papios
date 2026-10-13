@@ -1,3 +1,5 @@
+import type { FounderDiscount, FounderTerms, ProjectPart, Settings, VatMode } from '@papi/core';
+
 export type Stage =
   | 'new'
   | 'analyzing'
@@ -149,6 +151,116 @@ export type NextStepUpdate =
   | { kind: 'closed' }
   | { kind: 'playbook'; playbook: 'soguk_ana' | 'hafif_soguk' };
 
+export interface ServicePackageInfo {
+  code: string;
+  name: string;
+  monthly_kurus: number | null;
+  starting_from: boolean;
+  has_payment_paths: boolean;
+  summary: string;
+  features: string[];
+}
+
+export interface SalesContext {
+  packages: ServicePackageInfo[];
+  pricing: Settings['pricing'];
+  founder: FounderTerms | null;
+  vatDefault: Settings['vat']['mode'];
+  validDays: number;
+}
+
+export type ProposalStatus =
+  | 'draft'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'sent'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
+
+export interface ProposalSummary {
+  id: string;
+  number: string;
+  status: ProposalStatus;
+  company_id: string;
+  company_name: string;
+  package_code: string;
+  monthly_kurus: number | null;
+  valid_until: string;
+  created_at: string;
+}
+
+export interface ProposalDetail extends ProposalSummary {
+  quote: Record<string, unknown>;
+  founder_discount: FounderDiscount | null;
+  vat_mode: VatMode | null;
+  intro: string | null;
+  scope: string[];
+  pdf_path: string | null;
+  sent_at: string | null;
+  approval_id: string | null;
+  company_phone: string | null;
+}
+
+export interface ProposalPatch {
+  intro?: string;
+  scope?: string[];
+  vat_mode?: VatMode;
+  founder_discount?: FounderDiscount | null;
+  quote?: Record<string, unknown>;
+  monthly_kurus?: number;
+}
+
+export interface NewProjectProposal {
+  companyId: string;
+  parts: ProjectPart[];
+  intro: string;
+  scope: string[];
+  vatMode: VatMode;
+  quote: Record<string, unknown>;
+  validUntil: string;
+}
+
+export interface DemoSummary {
+  id: string;
+  company_id: string;
+  company_name: string;
+  url: string | null;
+  status: 'active' | 'closed';
+  expires_at: string;
+  visits: number;
+  messages: number;
+}
+
+export interface MeetingSummary {
+  id: string;
+  company_id: string;
+  company_name: string;
+  status: 'proposed' | 'scheduled' | 'done' | 'cancelled' | 'no_show';
+  starts_at: string | null;
+  summary: string | null;
+}
+
+export interface CompanySales {
+  meetings: MeetingSummary[];
+  proposals: ProposalSummary[];
+  demos: DemoSummary[];
+}
+
+/** Server-side actions on the Worker (apps/api/src/panel-api.ts). */
+export type WorkerAction =
+  | 'proposal.draft'
+  | 'proposal.vat'
+  | 'proposal.submit'
+  | 'proposal.sent'
+  | 'proposal.close'
+  | 'meeting.propose'
+  | 'meeting.schedule'
+  | 'meeting.note'
+  | 'meeting.brief'
+  | 'demo.create';
+
 /** Data access used by the panel. Supabase-backed in the app, faked in tests. */
 export interface PanelApi {
   listCompanies(filter: { search?: string; stage?: Stage | 'all' }): Promise<CompanySummary[]>;
@@ -170,4 +282,24 @@ export interface PanelApi {
   }): Promise<InboxItem[]>;
   setInboxHandled(id: string, handled: boolean): Promise<void>;
   listPlaybooks(): Promise<PlaybookOverview[]>;
+
+  // --- Sales (Phase 4) ---
+  salesContext(): Promise<SalesContext>;
+  listProposals(): Promise<ProposalSummary[]>;
+  getProposal(id: string): Promise<ProposalDetail | null>;
+  updateProposal(id: string, patch: ProposalPatch): Promise<void>;
+  createProjectProposal(p: NewProjectProposal): Promise<string>;
+  /** Uploads the browser-made PDF (K-13.12) and stores its path on the proposal. */
+  saveProposalPdf(id: string, pdf: Uint8Array): Promise<string>;
+  /** Time-limited link to a stored PDF. */
+  proposalPdfUrl(path: string): Promise<string>;
+  listDemos(): Promise<DemoSummary[]>;
+  upcomingMeetings(): Promise<MeetingSummary[]>;
+  companySales(companyId: string): Promise<CompanySales>;
+  /** True when the Worker URL is configured (actions below are available). */
+  workerAvailable(): boolean;
+  worker<T = Record<string, unknown>>(
+    action: WorkerAction,
+    body: Record<string, unknown>,
+  ): Promise<T>;
 }

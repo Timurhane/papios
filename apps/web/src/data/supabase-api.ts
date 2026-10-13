@@ -1,6 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { FounderTerms, Settings } from '@papi/core';
 import type {
   ApprovalItem,
+  CompanySales,
+  DemoSummary,
+  MeetingSummary,
+  ProposalDetail,
+  ProposalSummary,
+  SalesContext,
+  ServicePackageInfo,
   Channel,
   CompanyDetail,
   CompanySummary,
@@ -31,6 +39,18 @@ type ApprovalRow = {
 type TouchRow = Omit<OneClickItem, 'company_name'>;
 type InboxRow = Omit<InboxItem, 'company_name'>;
 
+const PROPOSAL_SUMMARY =
+  'id, number, status, company_id, package_code, monthly_kurus, valid_until, created_at';
+const PROPOSAL_DETAIL = `${PROPOSAL_SUMMARY}, quote, founder_discount, vat_mode, intro, scope, pdf_path, sent_at, approval_id`;
+const DEMO_COLUMNS = 'id, company_id, token, status, expires_at, visits, messages';
+const MEETING_COLUMNS = 'id, company_id, status, starts_at, notes';
+
+type ProposalRowDb = Omit<ProposalSummary, 'company_name'>;
+type DemoRowDb = Omit<DemoSummary, 'company_name' | 'url'> & { token: string };
+type MeetingRowDb = Omit<MeetingSummary, 'company_name' | 'summary'> & {
+  notes: { summary?: string } | null;
+};
+
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 
 function must<T>(res: { data: T; error: { message: string } | null }): T {
@@ -39,7 +59,7 @@ function must<T>(res: { data: T; error: { message: string } | null }): T {
 }
 
 /** Panel data access through the user's own session: RLS (tenant + aal2) applies to every query. */
-export function createSupabasePanelApi(db: SupabaseClient): PanelApi {
+export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null = null): PanelApi {
   let tenantId: string | null = null;
   const tenant = async () => {
     if (tenantId) return tenantId;
@@ -176,6 +196,228 @@ export function createSupabasePanelApi(db: SupabaseClient): PanelApi {
       );
     },
 
+    async salesContext(): Promise<SalesContext> {
+      const [packages, settings, founder] = await Promise.all([
+        db
+          .from('service_packages')
+          .select(
+            'code, name, monthly_price_kurus, price_is_starting_from, has_payment_paths, summary, features',
+          )
+          .eq('active', true)
+          .order('position'),
+        db.from('settings').select('key, value').in('key', ['pricing', 'vat', 'sales']),
+        db
+          .from('founder_discount')
+          .select(
+            'total_slots, used_slots, setup_discount_max_pct, monthly_discount_pct, monthly_discount_months',
+          )
+          .maybeSingle(),
+      ]);
+      const byKey = new Map(
+        (must(settings) as { key: string; value: unknown }[]).map((r) => [r.key, r.value]),
+      );
+      const f = must(founder) as {
+        total_slots: number;
+        used_slots: number;
+        setup_discount_max_pct: number;
+        monthly_discount_pct: number;
+        monthly_discount_months: number;
+      } | null;
+      const terms: FounderTerms | null = f
+        ? {
+            slotsLeft: f.total_slots - f.used_slots,
+            setupMaxPct: f.setup_discount_max_pct,
+            setupPct: f.setup_discount_max_pct,
+            monthlyPct: f.monthly_discount_pct,
+            monthlyMonths: f.monthly_discount_months,
+          }
+        : null;
+      return {
+        packages: (
+          must(packages) as {
+            code: string;
+            name: string;
+            monthly_price_kurus: number | null;
+            price_is_starting_from: boolean;
+            has_payment_paths: boolean;
+            summary: string;
+            features: string[];
+          }[]
+        ).map((p): ServicePackageInfo => ({
+          code: p.code,
+          name: p.name,
+          monthly_kurus: p.monthly_price_kurus === null ? null : Number(p.monthly_price_kurus),
+          starting_from: p.price_is_starting_from,
+          has_payment_paths: p.has_payment_paths,
+          summary: p.summary,
+          features: p.features,
+        })),
+        pricing: byKey.get('pricing') as Settings['pricing'],
+        vatDefault: (byKey.get('vat') as Settings['vat'] | undefined)?.mode ?? 'unspecified',
+        validDays: (byKey.get('sales') as Settings['sales'] | undefined)?.proposal_valid_days ?? 14,
+        founder: terms,
+      };
+    },
+
+    async listProposals() {
+      const rows = must(
+        await db
+          .from('proposals')
+          .select(PROPOSAL_SUMMARY)
+          .order('created_at', { ascending: false })
+          .limit(200),
+      ) as ProposalRowDb[];
+      return withCompanyNames(db, rows.map(numberMonthly));
+    },
+
+    async getProposal(id) {
+      const row = must(
+        await db.from('proposals').select(PROPOSAL_DETAIL).eq('id', id).maybeSingle(),
+      ) as (ProposalRowDb & Omit<ProposalDetail, keyof ProposalSummary | 'company_phone'>) | null;
+      if (!row) return null;
+      const company = must(
+        await db
+          .from('companies')
+          .select('name, phone_e164')
+          .eq('id', row.company_id)
+          .maybeSingle(),
+      ) as { name: string; phone_e164: string | null } | null;
+      return {
+        ...numberMonthly(row),
+        company_name: company?.name ?? '',
+        company_phone: company?.phone_e164 ?? null,
+      };
+    },
+
+    async updateProposal(id, patch) {
+      must(await db.from('proposals').update(patch).eq('id', id));
+    },
+
+    async createProjectProposal(p) {
+      const row = must(
+        await db
+          .from('proposals')
+          .insert({
+            tenant_id: await tenant(),
+            company_id: p.companyId,
+            package_code: 'ozel',
+            status: 'draft',
+            quote: p.quote,
+            vat_mode: p.vatMode,
+            valid_until: p.validUntil,
+            intro: p.intro,
+            scope: p.scope,
+          })
+          .select('id')
+          .single(),
+      ) as { id: string };
+      return row.id;
+    },
+
+    async saveProposalPdf(id, pdf) {
+      const path = `${await tenant()}/${id}.pdf`;
+      const up = await db.storage
+        .from('proposals')
+        .upload(path, new Blob([pdf.slice()], { type: 'application/pdf' }), {
+          upsert: true,
+          contentType: 'application/pdf',
+        });
+      if (up.error) throw new Error(up.error.message);
+      must(await db.from('proposals').update({ pdf_path: path }).eq('id', id));
+      return path;
+    },
+
+    async proposalPdfUrl(path) {
+      const r = await db.storage.from('proposals').createSignedUrl(path, 7 * 86_400);
+      if (r.error) throw new Error(r.error.message);
+      return r.data.signedUrl;
+    },
+
+    async listDemos() {
+      const rows = must(
+        await db
+          .from('demos')
+          .select(DEMO_COLUMNS)
+          .order('created_at', { ascending: false })
+          .limit(200),
+      ) as DemoRowDb[];
+      return withCompanyNames(
+        db,
+        rows.map((r) => toDemo(r, apiUrl)),
+      );
+    },
+
+    async upcomingMeetings() {
+      const rows = must(
+        await db
+          .from('meetings')
+          .select(MEETING_COLUMNS)
+          .eq('status', 'scheduled')
+          .gte('starts_at', new Date(Date.now() - 3_600_000).toISOString())
+          .order('starts_at')
+          .limit(20),
+      ) as MeetingRowDb[];
+      return withCompanyNames(db, rows.map(toMeeting));
+    },
+
+    async companySales(companyId): Promise<CompanySales> {
+      const [meetings, proposals, demos, company] = await Promise.all([
+        db
+          .from('meetings')
+          .select(MEETING_COLUMNS)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        db
+          .from('proposals')
+          .select(PROPOSAL_SUMMARY)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        db
+          .from('demos')
+          .select(DEMO_COLUMNS)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        db.from('companies').select('name').eq('id', companyId).maybeSingle(),
+      ]);
+      const name = (must(company) as { name: string } | null)?.name ?? '';
+      return {
+        meetings: (must(meetings) as MeetingRowDb[]).map((m) => ({
+          ...toMeeting(m),
+          company_name: name,
+        })),
+        proposals: (must(proposals) as ProposalRowDb[]).map((p) => ({
+          ...numberMonthly(p),
+          company_name: name,
+        })),
+        demos: (must(demos) as DemoRowDb[]).map((d) => ({
+          ...toDemo(d, apiUrl),
+          company_name: name,
+        })),
+      };
+    },
+
+    workerAvailable() {
+      return apiUrl !== null;
+    },
+
+    async worker<T = Record<string, unknown>>(action: string, body: Record<string, unknown>) {
+      if (!apiUrl) throw new Error('Sunucu adresi (VITE_API_URL) ayarlı değil.');
+      const { data } = await db.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Oturum bulunamadı; yeniden giriş yap.');
+      const res = await fetch(`${apiUrl}/panel/${action}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? `İşlem başarısız (${res.status})`);
+      return json as T;
+    },
+
     async today(): Promise<TodaySummary> {
       const since = new Date(Date.now() - 86_400_000).toISOString();
       const todayIso = new Date().toISOString().slice(0, 10);
@@ -279,4 +521,18 @@ async function toApprovalItems(db: SupabaseClient, rows: ApprovalRow[]): Promise
       : [],
     maxWords: cold.has(r.id) ? maxWords : null,
   }));
+}
+
+function numberMonthly<T extends { monthly_kurus: number | null }>(r: T): T {
+  return { ...r, monthly_kurus: r.monthly_kurus === null ? null : Number(r.monthly_kurus) };
+}
+
+function toDemo(r: DemoRowDb, apiUrl: string | null): Omit<DemoSummary, 'company_name'> {
+  const { token, ...rest } = r;
+  return { ...rest, url: apiUrl ? `${apiUrl}/demo/${token}` : null };
+}
+
+function toMeeting(r: MeetingRowDb): Omit<MeetingSummary, 'company_name'> {
+  const { notes, ...rest } = r;
+  return { ...rest, summary: notes?.summary ?? null };
 }

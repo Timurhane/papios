@@ -25,7 +25,7 @@ if (!config) {
     <StrictMode>
       <BrowserRouter>
         <AuthProvider client={authClient}>
-          <PanelApiProvider api={createSupabasePanelApi(supabase)}>
+          <PanelApiProvider api={createSupabasePanelApi(supabase, config.apiUrl)}>
             <App />
           </PanelApiProvider>
         </AuthProvider>
