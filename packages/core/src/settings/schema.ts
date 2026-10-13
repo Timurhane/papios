@@ -7,22 +7,27 @@ const kurus = z.number().int().nonnegative();
 export const llmProviderSchema = z.enum(['gemini', 'groq', 'anthropic']);
 export const llmTierSchema = z.enum(['light', 'medium', 'heavy']);
 
-const tierRoute = z.object({
+const modelRef = z.object({
   provider: llmProviderSchema,
-  /** Model id; null until verified against provider docs (Phase 1). */
+  /** Provider model id. Aliases such as `gemini-flash-latest` are preferred over pinned versions. */
   model: z.string().min(1).nullable(),
-  fallback: z
-    .object({ provider: llmProviderSchema, model: z.string().min(1).nullable() })
-    .nullable(),
 });
 
-const providerQuota = z.object({
+const tierRoute = modelRef.extend({ fallback: modelRef.nullable() });
+
+/**
+ * Quota bucket. Buckets are named `<provider>` for text generation and `<provider>_<op>` for other
+ * operations (e.g. `gemini_embed`, `groq_transcribe`) because providers meter them separately.
+ */
+const quotaBucket = z.object({
   enabled: z.boolean(),
-  /** Requests per minute; null = not configured yet (calls are blocked until set). */
+  /** Requests per minute; null = not configured yet (calls are refused until set). */
   rpm: z.number().int().positive().nullable(),
   /** Requests per day; null = not configured yet. */
   rpd: z.number().int().positive().nullable(),
-  /** Free tier: provider may train on inputs, so personal/client data must never be sent. */
+  /** IANA zone in which the provider resets its daily quota. */
+  day_timezone: z.string().min(1),
+  /** Free tier: provider may use inputs to improve products, so personal/client data is never sent. */
   free_tier: z.boolean(),
 });
 
@@ -70,13 +75,60 @@ export const settingsSchemas = {
   ),
   llm: z.object({
     routing: z.record(llmTierSchema, tierRoute),
-    quotas: z.record(llmProviderSchema, providerQuota),
+    embedding: modelRef.extend({ dimensions: z.number().int().positive() }),
+    transcription: modelRef.extend({ language: z.string().min(2) }),
+    speech: modelRef.extend({ voice: z.string().min(1).nullable() }),
+    quotas: z.record(z.string().regex(/^[a-z]+(_[a-z]+)?$/), quotaBucket),
+    cache_ttl_days: z.number().int().positive(),
+    /** Agent loop step limit; keeps a Telegram turn inside Workers' subrequest budget. */
+    max_agent_steps: z.number().int().min(1).max(8),
+  }),
+  outreach: z.object({
+    /** Name shown as the email sender. */
+    sender_name: z.string().min(1),
+    /** Appended to emails and messages by code (never written by the model). */
+    signature: z.string(),
+    /** Playbooks whose first email counts as a cold email (80-word rule, K-10.15). */
+    cold_playbooks: z.array(z.string()),
+    /** Max new drafts per cron tick (quota and Workers subrequest budget). */
+    drafts_per_tick: z.number().int().min(1).max(5),
+  }),
+  telegram: z.object({
+    /** Reply with synthesized audio too (K-15.2, optional). */
+    voice_replies: z.boolean(),
+    /** Max approvals per grouped message. */
+    approvals_per_message: z.number().int().min(1).max(10),
   }),
   night_shift: z.object({
     /** Optional automatic quiet window if /uyuyorum is forgotten. */
     auto_window: z.object({ start: hhmm, end: hhmm }).nullable(),
     /** In quiet mode, deliver urgent alerts as silent Telegram notifications. */
     urgent_as_silent: z.boolean(),
+    /** K-15.5 night work: where to look for new leads and how much to do per night (quota budget). */
+    areas: z.array(z.string().min(1)).max(10),
+    sectors: z.array(
+      z.enum([
+        'clinic',
+        'real_estate',
+        'auto',
+        'hotel',
+        'education',
+        'construction',
+        'manufacturing',
+      ]),
+    ),
+    max_searches_per_night: z.number().int().min(0).max(10),
+    max_drafts_per_night: z.number().int().min(0).max(50),
+  }),
+  intelligence: z.object({
+    /** Companies at or above this score get the weekly site rescan (K-8.11). */
+    signal_min_score: z.number().int().min(0).max(100),
+    /** AJNA's competitors (names or sites) for the weekly competitor scan. */
+    competitors: z.array(z.string().min(1)).max(20),
+    /** Sectors for the weekly news-based opportunity search. */
+    news_sectors: z.array(z.string().min(1)).max(10),
+    /** Start point of the visit route (K-10.7). */
+    home: z.object({ lat: z.number(), lng: z.number() }).nullable(),
   }),
   notifications: z.object({
     hot_reply: z.boolean(),
@@ -93,8 +145,53 @@ export const settingsSchemas = {
   }),
   vat: z.object({ mode: z.enum(['unspecified', 'included', 'excluded']) }),
   revenue_target: z.object({ monthly_kurus: kurus.nullable() }),
-  analysis_tool: z.object({ daily_limit: z.number().int().positive() }),
-  demo: z.object({ ttl_days: z.number().int().positive() }),
+  analysis_tool: z.object({
+    daily_limit: z.number().int().positive(),
+    /** Requests per IP per hour (IP is hashed, K-17.4). */
+    per_ip_per_hour: z.number().int().positive(),
+    /** How long the on-screen report link stays open (K-12.6). */
+    report_days: z.number().int().positive(),
+    /** Version of the consent text shown with the form; stored with each request (K-17.7). */
+    consent_version: z.string().min(1),
+    /** Public privacy notice the form links to; null shows the built-in notice. */
+    privacy_url: z.string().nullable(),
+  }),
+  /** Provider free-tier limits shown next to usage (docs/free-tier-limits.md has the sources). */
+  free_limits: z.object({
+    db_mb: z.number().positive(),
+    storage_mb: z.number().positive(),
+    actions_minutes_month: z.number().positive(),
+    /** Fixed monthly Actions minutes of scheduled workflows (heavy jobs every 6 h, nightly backup). */
+    actions_scheduled_minutes: z.number().min(0),
+    /** Typical minutes of one heavy-jobs run (setup + Playwright install). */
+    actions_minutes_per_run: z.number().positive(),
+    workers_requests_day: z.number().positive(),
+  }),
+  live_voice: z.object({
+    /** K-15.7: daily speaking minutes in the panel. */
+    daily_minutes: z.number().int().positive(),
+    model: z.string().min(1),
+  }),
+  demo: z.object({
+    ttl_days: z.number().int().positive(),
+    /** Visitor messages per demo per day and across all demos per day (public endpoint, K-17.4). */
+    messages_per_demo_per_day: z.number().int().positive(),
+    messages_total_per_day: z.number().int().positive(),
+  }),
+  operations: z.object({
+    /** K-14.4: how long the client's setup form link stays open. */
+    setup_form_valid_days: z.number().int().positive(),
+    /** Days after the due date before an unpaid charge is reported on Telegram (K-15.4). */
+    overdue_grace_days: z.number().int().min(0),
+  }),
+  sales: z.object({
+    meeting_minutes: z.number().int().positive(),
+    slot_count: z.number().int().min(1).max(5),
+    slot_lead_hours: z.number().int().min(0),
+    slot_horizon_days: z.number().int().min(1).max(30),
+    preferred_times: z.array(hhmm).min(1),
+    proposal_valid_days: z.number().int().positive(),
+  }),
   pricing: z.object({
     no_setup_path: z.object({
       commitment_months: z.number().int().positive(),

@@ -145,10 +145,177 @@ Ayar anahtarları ve biçimleri tek kaynaktan gelir: `packages/core/src/settings
 
 - **Panel:** Cloudflare Pages Git entegrasyonu (V-21). Güvenlik başlıkları `apps/web/public/_headers`.
 - **Veritabanı:** elle tetiklenen `DB deploy` iş akışı (`supabase db push --include-seed`; seed idempotent) (V-22).
-- **Worker:** Faz 1'de (cron + Telegram webhook ile birlikte).
+- **Worker:** elle tetiklenen `API deploy` iş akışı: `wrangler deploy` + secret'ları GitHub'dan Worker'a aktarma + Telegram `setWebhook`.
 
 ## 12. Ücretsiz katmanın tasarıma etkisi
 
 - Workers: cron çağrısı başına 10 ms CPU ve 50 alt istek → dağıtıcı tik başına sınırlı iş alır; ağır iş Actions'ta.
 - Workers: hesap başına 5 cron → tek "her dakika" dağıtıcı + birkaç zamanlanmış tetikleyici; rutinler kuyruk üzerinden.
 - Supabase: 1 hafta hareketsizlikte duraklatma → dakikalık cron projeyi canlı tutar; yedek yok → gece `pg_dump`.
+
+## 13. Faz 1: Telegram turu
+
+```
+Telegram ──POST /telegram/webhook (secret token)──► Worker
+  ├─ sahip değil → audit_log 'telegram.ignored', cevap yok
+  └─ sahip → 200 OK hemen; arka planda (waitUntil):
+       sesli not → getFile → Groq Whisper → metin
+       komut     → kural tabanlı cevap (model yok)
+       metin     → düzeltme bekleniyorsa onaya düzeltme olarak işlenir
+                 → yoksa Papi ajan döngüsü (en fazla 4 adım, JSON araç protokolü)
+                      araçlar: search_knowledge, save_knowledge, list_pending_approvals,
+                               quota_status, set_quiet_mode, queue_lead_link
+       buton     → onay/ret/düzelt (tekil veya toplu), stil hafızasına kayıt
+```
+
+- Bilgi arama önce anahtar kelimeyle (model yok), sonuç yoksa vektörle (gömme kotası harcar).
+- Sessiz mod: `runtime_state.quiet_mode` veya ayardaki otomatik pencere. Sessizde yalnızca sistem hatası ve
+  sıcak cevap gelir; diğerleri `held_notifications`'a yazılır, `/uyandim` özetler.
+- Cron (her dakika): bakım işlerini kuyruğa ekler (15 dk'da bir gömme, günde bir model doğrulama) ve en fazla
+  3 hafif işi çalıştırır. Kota dolu işler deneme hakkı yakılmadan bekletilir.
+- Kod düzeni: saf mantık `packages/core` (llm, agent, queue, telegram); Worker'a özgü olanlar `apps/api`
+  (`bot.ts`, `repo/`, `jobs/`, `telegram/client.ts`). `Repo` arayüzünün bellek içi uygulaması testlerde,
+  Supabase uygulaması canlıda; ikincisi CI'da gerçek PostgREST'e karşı entegrasyon testinden geçer.
+
+## 14. Faz 2: Aday → analiz → puan
+
+```
+Telegram linki / Papi aracı ──► jobs: lead.add_from_link (hafif, öncelik 10)
+                                   │  cron (her dk, tur başına 1 iş)
+                                   ▼
+                     Kaşif.addFromLink: site | Instagram (Graph API) | Harita adı (+ grounding, doğrulanır)
+                                   ▼
+                     Analist.analyzeCompanies:
+                       fetchSite (HTTP, 200 KB) ─┐   okunamazsa → analysis.deep_crawl (ağır, Playwright)
+                       PageSpeed mobil+masaüstü  ├─► kurallar (sinyaller) → tek model çağrısı (5 firma/çağrı)
+                       sektör/il kuralları      ─┘   → puan (K-9.3) + gerekçe → sıradaki adım (K-9.4)
+                                   ▼
+                     companies + analyses + score_history + company_events + contacts + memory_items
+                                   ▼
+                     Telegram kartı (puan, en güçlü bulgu, gerekçe, panel linki)
+
+CSV (panel) / OSM / web araması ──► ağır işler (GitHub Actions, 6 saatte bir veya anında tetikleme)
+                                   ──► importRows (mükerrer kontrolü) ──► analysis.batch
+```
+
+- Ortak sunucu kodu `packages/server`: `Repo` (Supabase + bellek içi), Analist ve Kaşif servisleri, Instagram ve
+  (kapalı) Places adaptörleri, Telegram istemcisi. Hem Worker (`apps/api`) hem Actions işçisi (`apps/jobs`) kullanır.
+- Panel veriye kullanıcının kendi oturumuyla erişir (`PanelApi`): RLS (kiracı + TOTP) her sorguda geçerlidir.
+
+## 15. Faz 3: Ulaşma
+
+```
+cron (her dk; o dakika iş kuyruğunda iş yoksa, dakika % 4):
+  0 → autoEnroll (playbook atanmış firmalar) + advanceEnrollments → Ulak taslağı → onay kuyruğu → Telegram grubu
+  1 → reconcilePanelDecisions (panelden verilen kararlar) + sendNextEmail (iş saati, ısınma, rastgele aralık,
+      outbound guard, çıkış linki + List-Unsubscribe)
+  2 → gelen kutusu (MailTransport.fetchNew) → kural tabanlı sınıflandırma → dizi durur / reddedenler / sıcak bildirim
+  3 → tek tık hatırlatmaları (WhatsApp, Instagram, LinkedIn, X, arama, ziyaret)
+
+Onay: Telegram butonu → hemen onApprovalDecided (e-posta → scheduled, tek tık → ready)
+      Panel → app.panel_decide_approval (yalnızca onay satırı + isteğe bağlı elle düzenleme) → Worker 1. adımda uygular
+Tek tık: Telegram "Gönderdim/Atla" veya panel → app.panel_complete_touch
+Çıkış: GET /u/:token (onay sayfası) · POST /u/:token (RFC 8058 tek tık) → global reddedenler listesi
+```
+
+- **Reddedenler üç katmanda:** `checkOutbound` (kod), `app.enforce_suppression` tetikleyicisi (veritabanı; service
+  role dahil kimse atlayamaz), panel fonksiyonu tetikleyiciden dönen hatayı "iptal" olarak işler.
+- **Kişisel veri modele gitmez:** Ulak taslağına firmanın herkese açık bilgileri gider; selamlama (kişi adı) ve imza
+  kodla eklenir. Cevap sınıflandırma kural tabanlıdır (cevap metni kişisel veridir).
+- **Mail taşıyıcı** `MailTransport` arayüzünün arkasındadır; A-1 kararına kadar `DisabledMailTransport` (hiçbir şey
+  gönderilmez/okunmaz, taslak ve onay akışı çalışır).
+- **Adım performansı** `public.playbook_step_stats` görünümünden (security_invoker; RLS geçerli).
+
+## 16. Faz 4: Satış
+
+```
+Telegram /gorusme {firma} → yazı/sesli not ─┐
+Panel firma kartı → "Notu kaydet"          ─┴► redactPersonal (K-4.9) → Satıcı: yapılandırılmış not
+                                               → meetings (ham not yalnızca bizim DB'de)
+                                               → paket önerildiyse draftProposal: quotePaths (kod) + giriş/kapsam (model)
+                                               → KDV sorusu (Telegram butonu / panel) → onay kuyruğu
+Onay (Telegram ya da panel → Worker reconcile) → proposals.approved
+Panel: PDF (pdf-lib + Noto Sans, tarayıcıda) → Storage `proposals/{tenant}/{id}.pdf` → imzalı link
+     → WhatsApp tek tık / elle → "Gönderildi" → Teklif Takibi
+     → "Kabul edildi" → app.accept_proposal (kurucu kontenjanı atomik) → Kazanıldı
+
+Gelen "ilgileniyor/soru" cevabı → iş: satici.reply_draft → ayıklanmış metin → taslak (+ {saatler} → meetingSlots)
+     → e-posta touch (aynı thread) → onay → iş saatinde gönderim (mail bağlanınca)
+
+Demo: /demo {firma} | panel | Soğuk Ana G7 → demos (32 bayt anahtar, 14 gün)
+     GET /demo/:t → app.demo_touch(visit) · POST /demo/:t/chat → Turnstile → IP sınırı → app.demo_touch(message)
+     → ayıklanmış mesaj + yalnızca demonun anlık görüntüsü → model
+Panel → Worker: POST /panel/:işlem (Supabase Auth ile doğrulanan aal2 oturum + üyelik, CORS: panel adresi)
+```
+
+- Takvim `CalendarProvider` arkasında (`GoogleCalendar` / `DisabledCalendar`); OAuth yenileme anahtarı Worker
+  secret'ında.
+- Teklif numarası `AJNA-YYYY-NNNN`, kiracı ve yıl başına sayaçla, veritabanında verilir.
+- KDV cevabı olmadan teklif onaya gidemez (veritabanı kısıtı).
+
+## 17. Faz 5: Operasyon
+
+```
+Panel "Kabul edildi (kurulumsuz/kurulumlu)" → closeProposal → app.accept_proposal (kurucu kontenjanı)
+  → Operatör.onClientWon:
+      projects (paket, ödeme yolu, sözleşme sonu, metrics_token)
+      subscriptions + payments (kurulum bedeli, ilk ay) → ödendi → finance_entries (tetikleyiciyle, bir kez)
+      setup_forms (32 bayt anahtar, 30 gün) → form linki mesajı → onay kuyruğu
+      geçici Claude Code promptu + kontrol listesi (project_tasks, project_artifacts)
+      Müşteri Yaşamı (anchor = sözleşme sonu) + Referans dizileri
+Müşteri: GET/POST /kurulum/:anahtar (Turnstile) → app.submit_setup_form (bir kez)
+  → Operatör.onSetupFormSubmitted: papi-config.json + Claude Code promptu + kontrol listesi (şablon, model yok)
+Teslim edilen modül (müşterinin hesabı) → POST /metrics/push (Bearer metrics_token; yalnızca sayılar)
+  → module_metrics → ayın 1'i: aylık rapor taslağı → onay → e-posta
+Faz 6'dan itibaren tahsilat kontrolü ve aylık raporlar rutin olarak çalışır (bkz. §18).
+```
+
+- `packages/modules`: katalog, kurulum formu alanları, müşteri yapılandırma şeması (zod → `config.schema.json`),
+  Operatör şablonları; her modülde README/SETUP/TESTS; `cevap-asistani/worker` çalışan referans (site kutusu,
+  Instagram DM, kapalı WhatsApp, ilgilenen bildirimi, aylık sayılar).
+- Müşteri verisi (form cevapları, yapılandırma) `client_sensitive`: hiçbir modele gitmez; çıktılar şablonla üretilir.
+
+## 18. Faz 6: Zeka ve otomasyon
+
+```
+Worker cron (her dakika):
+  tickRoutines → vadesi gelen rutin → kuyruk 'routine.run' → runRoutine (izinli 13 eylem) → Telegram (daily_report)
+  sessizse ve dakika%30=0 → nightShiftTick → 'kasif.osm_search' (Actions) · bütçe: gece 2 arama, 10 taslak
+  ulaşma adımı 0: nightDraftBudgetUsed ise taslak üretimi sabaha kalır · adım 1: reconcileAutomationDecisions
+Telegram: /uyuyorum → sessiz mod + startNightShift · /uyandim → endNightShift özeti
+          /rutin [istek | kapat n | ac n] → model yalnızca yapı çıkarır → validateRoutine → onay düğmesi → saveRoutine
+Actions (heavy):
+  signals.site_scan  → siteFeatures + diffSiteFeatures (ISO hafta fingerprint) → signals → Sinyal playbook'u
+  signals.news       → Gemini grounding (public) → signals
+  signals.osm_new    → Overpass, bölge×sektör sırası; ilk kapsamadan sonra yeni görünenler → new_opening
+  intel.competitors / intel.sector_news → grounded özet → Telegram
+  geo.geocode        → Nominatim (15 sn arayla, app.geocode_cache) → companies.lat/lng/geocoded_at
+Rutin eylemleri: content_plan (Kalem → content_items + onay; yer adı geçen taslak elenir),
+  learning_review (düzeltmelerden kural, adım performansından playbook önerisi → suggestions + onay)
+Embed: notes (app.notes_to_embed: müşteriye ait notlar hariç) → redactPersonal → embedding → app.match_notes
+Panel: Rutinler (saat/aç-kapa, doğal dil → /panel/routine.parse|save) · İçerik · Ölçütler · Harita (Leaflet + OSM)
+```
+
+- Rutin eylemleri veritabanında da izinli listeyle kısıtlı (check constraint); rutin keyfi kod çalıştıramaz.
+- Öneriler ve içerikler onay kuyruğundan geçer; onaylanmadan hiçbir kural/playbook değişmez.
+- Harita karoları `tile.openstreetmap.org` (atıf görünür); panel `Referrer-Policy: strict-origin-when-cross-origin`.
+
+## 19. Faz 7: Dış yüz ve sertleştirme
+
+```
+Analiz aracı: GET/POST /analiz (Turnstile, IP özetiyle saatlik sınır, günlük sınır, KVKK onayı)
+  → submitToolRequest: firma (source analysis_tool) + kişi + tool_requests (token özeti) → iş 'tool.analyze'
+  → runToolAnalysis: analyzeCompanies → buildToolReport (şablon) → Sıcak Gelen → Telegram (hot_reply)
+  → mail bağlıysa: checkOutbound (exempt: analysis_tool_report) → gönderim
+  GET /analiz/r/:token → rapor / hazırlanıyor / süresi doldu (frame-ancestors: ANALYSIS_EMBED_ORIGINS)
+Canlı ses: panel /konus → /panel/voice.start → Worker v1alpha/auth_tokens (tek kullanım; model, talimat, araçlar
+  kilitli) → tarayıcı WebSocket BidiGenerateContentConstrained → araç çağrısı → /panel/voice.tool (yalnızca
+  okuma + not + sessiz mod; sonuçlar maskeli) → /panel/voice.end (süre iadesi, özet)
+Müşteri portalı: /portal (ayrı uygulama) → app.portal_project() (client_portal bayrağı; client_users)
+Yedek: backup.yml gece → dump.sh (veri) → pazar restore-check.sh → age → artifact (30/90 gün)
+KVKK: günlük 'privacy.retention' → app.run_retention; panel → app.delete_company_personal_data
+Ölçütler: app.usage_overview → ücretsiz limitler (DB, dosya, Actions tahmini, Worker tahmini)
+```
+
+- Worker yanıtlarında `nosniff`, HSTS, `frame-ancestors 'none'` (analiz aracı hariç), referrer origin'le sınırlı.
+- CI: `pnpm audit --prod --audit-level=high`, gitleaks tüm geçmiş, RLS her tabloda açık testi.

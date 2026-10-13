@@ -52,6 +52,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **K-3.11** Harita: Leaflet + OpenStreetMap.
 - **K-3.12** Herkese açık formlarda bot koruması: Cloudflare Turnstile.
 - **K-3.13** Hata takibi: Sentry ücretsiz katmanı (kart istemiyorsa) veya kendi hata tablosu.
+  - Değişiklik (2026-10-13, Timurhan onayı, A-2): **kendi hata tablosu** (`error_events`); ciddi hatalar Telegram'a anında gider. Sentry kullanılmaz.
 - **K-3.14** Monorepo yapısı: `apps/{api,web,jobs}`, `packages/{core,prompts,modules}`, `supabase/{migrations,seed,policies}`, `docs/`, `.github/workflows/`. İyileştirme yapılırsa Timurhan'a bildirilir.
 - **K-3.15** Kuyruk: Supabase'de tablo tabanlı `jobs` (tür, payload, durum, `run_after`, deneme sayısı, kilit). Worker cron'u her dakika kısa işleri dağıtır; ağır işler GitHub Actions'a devredilir.
 - **K-3.16** Workers ücretsiz CPU süresi sınırı dikkate alınır; ağır parse/tarama Actions'ta.
@@ -146,6 +147,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **K-11.3** Seed set: Soğuk Ana (21 gün, 8 temas), Hafif Soğuk (14 gün, 4 temas), Sinyal (10 gün, 4–5 temas), Sıcak Gelen, Ziyaret Sonrası, Teklif Takibi, Uyandırma, Şimdi Değil, Referans (+ ortaklar dizisi), Müşteri Yaşamı — adımlar talimat Bölüm 11'deki gibi.
 - **K-11.4** Sıcak Gelen: analiz raporu anında ve onaysız; aynı gün arama görevi; G2 görüşme teklifi (onaylı); G5 takip; "ilk cevap süresi" ölçülür.
 - **K-11.5** Teklif Takibi'nde kurucu indirimi kontenjanı açısı yalnızca gerçek durum doğruysa.
+- **K-11.7** (2026-10-13, Timurhan onayı) Soğuk Ana'nın 8. teması: G17 kısa LinkedIn mesajı. Sıra: G1 mail, G3 WhatsApp, G5 Instagram DM, G7 demo, G10 telefon, G14 fikir maili, G17 LinkedIn, G21 kapanış maili.
 - **K-11.6** Papi öğrenimlerden playbook değişikliği **önerir**; uygulama Timurhan'ın onayıyla.
 
 ## Analiz aracı (Bölüm 12)
@@ -195,6 +197,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ## Güvenlik ve yasal (Bölüm 17)
 
+- **K-17.8** (2026-10-13, Timurhan onayı, A-4) GitHub reposu **özel** kalır; Actions dakika bütçesi 2.000 dk/ay'a göre planlanır.
 - **K-17.1** Panel girişi: Supabase Auth, mail + şifre + **zorunlu TOTP**. Kayıt kapalı; yalnızca tanımlı tek mail giriş yapabilir.
 - **K-17.2** RLS tüm tablolarda, `tenant_id` bazlı. Servis anahtarı yalnızca sunucu tarafında.
 - **K-17.3** Gizli bilgi repoya girerse commit engellenir (gitleaks veya pre-commit kontrolü).
@@ -213,16 +216,53 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ---
 
+## Faz 4 kararları (2026-10-13, Timurhan onayı)
+
+- **K-4.9** (A-7) Gelen cevaplar ve görüşme notları modele gitmeden önce kodla ayıklanır: e-posta, telefon, CRM'deki
+  kişi adları, unvanlı adlar ("Ahmet Bey", "Dr. ..."), imza bloğu, TC kimlik ve IBAN yer tutucuyla değiştirilir.
+  Geriye kalan işletme ihtiyacı "dahili" sınıftadır ve ücretsiz modele gidebilir. Kazanılmış müşteri verisi hiçbir
+  durumda gitmez (K-4.7 aynen geçerli).
+- **K-13.12** (B-1) Teklif PDF'i panelde, tarayıcıda üretilir (pdf-lib + Türkçe destekli gömülü yazı tipi); dosya
+  Supabase Storage'a özel olarak yüklenir.
+
+## Faz 5 kararları (2026-10-13, Timurhan "devam" ile önerileri onayladı)
+
+- **K-14.4** (C-1) Kurulum formunu müşteri doldurur: tahmin edilemez anahtarlı link, Turnstile, 30 gün geçerli.
+  Timurhan panelden düzeltebilir. Form cevapları müşteri verisidir (`client_sensitive`); hiçbir modele gitmez,
+  Operatör çıktıları şablonla üretilir.
+- **K-14.5** (C-2) Cevap asistanı referans implementasyonu müşterinin kendi Cloudflare hesabında çalışan bir Worker'dır:
+  site sohbet kutusu ve Instagram DM hazır; WhatsApp Business Cloud API adaptörü yazılı ama kapalı (ücret müşterinin).
+  Yapay zeka müşterinin kendi anahtarıyla; müşterinin müşterilerinin mesajları kişisel veri olduğundan ücretli
+  (eğitimde kullanılmayan) katman önerilir ve README/teklifte yazılır.
+
+## Faz 6 kararları (2026-10-13, Timurhan onayı)
+
+- **K-8.11** (D-1) Sinyal kaynakları: (a) yüksek puanlı firmaların sitesi haftada bir yeniden taranır, değişiklik
+  (randevu/WhatsApp/sohbet eklenmesi-kaldırılması, yeni şube, kampanya ya da iş ilanı sayfası) sinyal olur;
+  (b) haftada en fazla 20 firma için Gemini aramasıyla haber taraması; (c) OSM'de ilgili sektörlerde yeni açılan
+  işletmeler haftalık. Instagram bağlanırsa paylaşım sıklığı eklenir.
+- **K-3.18** (D-2) Harita konumu: adresi olan firmalar OpenStreetMap Nominatim ile (sonuç saklanır, atıf gösterilir)
+  GitHub Actions'ta toplu konumlandırılır. _Uygulama notu:_ resmi politika düzenli çalışan betikleri dakikada 4
+  istekle sınırlıyor; bu yüzden "saniyede 1" yerine 15 saniyede 1 istek kullanılıyor (karar özü aynı, daha sıkı uyum).
+
+## Faz 7 kararları (2026-10-13, Timurhan "önerilerini yap" ile onayladı)
+
+- **K-17.9** (E-1, A-5) Yedek hedefi: GitHub Actions artifact; günlük yedek 30 gün, ayın ilk yedeği 90 gün saklanır.
+  Yedek `age` ile şifrelidir (açık anahtar repoda, gizli anahtar yalnızca Timurhan'da). GitHub Free'de artifact +
+  Packages için hesap başına 500 MB (doğrulandı, bkz. free-tier-limits.md).
+- **K-12.6** (E-2) Analiz aracı Worker'da `/analiz`; AJNA sitesine iframe ile gömülür. Rapor ekranda tahmin edilemez
+  linkle 30 gün gösterilir; mail bağlandığında (A-1) ayrıca e-postayla gider.
+- **K-15.7** (E-3) Canlı sesli konuşmada Papi yalnızca okuma araçlarını (bilgi bankası, notlar, firma arama, günün
+  özeti, kota) ve not alma / sessiz modu kullanır; dışarı giden her şey onay kuyruğuna taslak düşer, sesle onay
+  verilmez. Günlük varsayılan 20 dakika.
+
 ## Açık kararlar (Timurhan onayı bekliyor)
 
-| #   | Konu                                                                             | Ne zaman gerekli                            |
-| --- | -------------------------------------------------------------------------------- | ------------------------------------------- |
-| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)                            | Faz 3 öncesi                                |
-| A-2 | Hata takibi: Sentry (kartsızsa) vs kendi hata tablosu (K-3.13)                   | Faz 0 içinde, limitler doğrulandıktan sonra |
-| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)                         | Faz 1                                       |
-| A-4 | GitHub reposu özel mi herkese açık mı (Actions dakika kotasını belirler, K-3.17) | Faz 0                                       |
-| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5)                   | Faz 7 (ama Faz 0'da bilinmesi iyi)          |
-| A-6 | KDV dahil/hariç (K-7.2)                                                          | İlk teklifte                                |
+| #   | Konu                                                     | Ne zaman gerekli                              |
+| --- | -------------------------------------------------------- | --------------------------------------------- |
+| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)    | Masaüstü kurulum oturumu (Faz 3 canlı kabulü) |
+| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9) | Faz 1                                         |
+| A-6 | KDV dahil/hariç (K-7.2)                                  | İlk teklifte                                  |
 
 ## Varsayımlar
 
@@ -240,7 +280,7 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-10** Reddedenler listesi ham değeri değil, normalize edilmiş değerin SHA-256 özetini saklar; kişi KVKK kapsamında silinse bile engel sürer.
 - **V-11** Mail ısınma eğrisi: günde 20 ile başla, her 7 günde +5, en çok 50; gönderimler arası rastgele 4–15 dk. Ayarlardan değişir.
 - **V-12** Analiz aracı günlük toplam limit varsayılanı 20.
-- **V-13** Soğuk Ana için talimatta "8 temas" yazıyor ama 7 adım listelenmiş; listelenen 7 adım seed edildi. **8. temas ne olsun?**
+- **V-13** ~~Soğuk Ana 8. temas~~ → K-11.7 ile karara bağlandı.
 - **V-14** Hafif Soğuk adımları: G1 mail, G4 WhatsApp, G8 Instagram DM, G14 kapanış maili.
 - **V-15** Sinyal adımları: G1 mail, G3 WhatsApp, G5 Instagram DM, G7 telefon, G10 kapanış maili.
 - **V-16** Teklif Takibi kanalları: G2 mail (soru), G5 WhatsApp (örnek), G10 mail (kurucu kontenjanı, yalnızca gerçekse), G20 mail (son takip).
@@ -251,3 +291,95 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-21** Panel, Cloudflare Pages'in Git entegrasyonuyla yayınlanır (build Cloudflare'de olur, GitHub Actions dakikası harcamaz).
 - **V-22** Canlı veritabanına migration, yalnızca elle tetiklenen `DB deploy` iş akışıyla uygulanır.
 - **V-23** `SUPABASE_ACCESS_TOKEN` mobil kurulum kolaylığı için "Full access" kapsamıyla, 90 günlük oluşturuldu. Faz 7 güvenlik gözden geçirmesinde yalnızca gereken izinlerle (proje okuma, veritabanı ve auth yapılandırması yazma) yeniden oluşturulacak.
+- **V-24** Canlı kurulum (GitHub secrets, DB deploy, Pages, Faz 1 anahtarları) bilgisayar başında tek oturuma ertelendi. Oluşturulan ilk Supabase token'ı kullanılmadan iptal edilecek.
+- **V-25** Model adları sabit sürüm yerine sağlayıcının takma adlarıyla (`gemini-flash-latest`, `gemini-flash-lite-latest`) ayarlandı; Groq yedekleri `openai/gpt-oss-20b` / `openai/gpt-oss-120b`, Whisper `whisper-large-v3-turbo`, gömme `gemini-embedding-001` (768 boyut). Kota değerleri gerçek limitler doğrulanana kadar düşük tutuldu (Gemini 10 dk / 250 gün). Günlük `llm.verify_models` işi ayardaki modeller sağlayıcıda yoksa Telegram'a uyarır. Kota sayfaları canlı kurulumda teyit edilecek.
+- **V-26** (A-3) Yazı → ses için Gemini TTS seçildi (ek hesap gerektirmez). Model adı ayarda boş olduğu için sesli cevap şimdilik kapalı; Telegram'a WAV dosyası olarak gider (OGG/Opus dönüşümü Workers'ta ağır).
+- **V-27** Ajan döngüsü sağlayıcıya özel "function calling" yerine tek bir JSON protokolü kullanır (her modelde aynı çalışır, test edilebilir). Bir Telegram turu en fazla 4 adım (Workers alt istek bütçesi).
+- **V-28** Firma hafızasında yalnızca herkese açık analizler (kind = analysis) vektörleştirilir; temas/cevap/görüşme notları kişisel veri içerebileceği için ücretsiz modele gönderilmez, anahtar kelimeyle aranır (K-4.7).
+- **V-29** Sesli notların yazıya çevrilmesi (Groq Whisper) K-3.9 gereği yapılır; Timurhan'ın kendi komutları `internal` sınıfındadır. Faz 4'teki görüşme notları kişisel veri içereceği için o fazda ayrıca ele alınacak.
+- **V-30** ~~`/ekle` linkleri ağır iş~~ → V-33 ile değişti: linkler hafif iş olarak Worker'da işlenir.
+- **V-31** CI her push'ta bir kez çalışır (ayrı pull_request tetikleyicisi yok); PR'lar sonucu commit durumu üzerinden görür.
+- **V-32** `app` şeması Supabase Data API'sine açıldı (RPC çağrıları için). Bu şemadaki her fonksiyonun yetkisi tek tek verilir; servis rolüne özel olanlar (`claim_jobs`, `consume_quota`, `attach_owner`) kullanıcılara kapalıdır.
+- **V-33** Kabul kriterindeki 5 dakika için tek link analizi Worker'da yapılır: ana sayfa + iletişim sayfası düz HTTP ile çekilir (en fazla 200 KB), PageSpeed yalnızca gereken alanlarla sorgulanır, tek model çağrısı yapılır. Playwright derin taraması, toplu analiz, CSV/OSM/web araması içe aktarmaları GitHub Actions'ta (K-3.6). Telegram webhook'unun arka plan süresi (~30 sn) PageSpeed için yetmediği için link önce kuyruğa girer; her dakika çalışan cron (15 dk'ya kadar çalışabilir) işler. Cron turu başına 1 iş (Workers 50 alt istek sınırı).
+- **V-34** Düz HTTP ile okunamayan site önce Playwright ile denenir; tarayıcı da açamazsa firma "çalışan web sitesi yok" olarak puanlanır. Böylece hiçbir kayıt sıradaki adımsız kalmaz (K-2.5).
+- **V-35** Bekleme listesine düşen firmanın yeniden değerlendirme tarihi 90 gün sonrası (yeni sinyal gelirse daha erken yeniden puanlanır, Faz 6).
+- **V-36** Puanlama ayrıntısı (sektör değeri 22/12/5, şube +6, bölge 10→3, mobil hız <50 → +8, WhatsApp yok +6, online randevu/sipariş yok +6, telefon/e-posta/karar verici +6/+5/+5 vb.) kodda tanımlıdır; ağırlıklar ve eşikler ayarlardan değişir. Ham puanlar ilgili bloğun ağırlığına ölçeklenir.
+- **V-37** Kısa Google Haritalar linkleri (maps.app.goo.gl) işletme adı içermediği için açılmaz (harita kazıması yok, K-8.9); uzun linklerde ad URL'den okunur ve resmi site Google araması destekli sorguyla bulunup site açılarak doğrulanır.
+- **V-38** Web sitesinden bulunan karar verici adları (ör. "Uzm. Dr. ...") kişiler tablosuna kaydedilir. Sitenin metin özeti herkese açık işletme bilgisi sayılır ve modele gidebilir; kişiler tablosundaki veriler modele gönderilmez.
+- **V-39** CSV içe aktarma panelde ayrıştırılır, `app.enqueue_csv_import` ile (RLS kontrollü) ağır iş olarak kuyruğa girer, en fazla 2.000 satır.
+- **V-40** Ağır işler 6 saatte bir (dakika bütçesi) ve isteğe bağlı olarak Worker'ın anında tetiklemesiyle çalışır; bunun için GitHub'da yalnızca bu repoya "Actions: write" yetkili ince ayarlı bir token gerekir (isteğe bağlı).
+- **V-41** Gönderen adı "Timurhan | AJNA Digital", imza "Timurhan / AJNA Digital · ajnadigitalagency.com" varsayılandır; ayarlardan (`outreach`) değişir. Soğuk sayılan playbook'lar: Soğuk Ana, Hafif Soğuk, Sinyal, Uyandırma (80 kelime kuralı yalnızca bunların ilk mailinde).
+- **V-42** Cevap sınıflandırma (ilgileniyor / soru / sonra / hayır / yazmayın / otomatik yanıt) kural tabanlıdır: cevap metni kişisel veri olduğundan ücretsiz modele gitmez (K-2.5). Belirsiz cevap "Cevap" olarak sıcak bildirime düşer.
+- **V-43** "Yazmayın" diyen ya da çıkış linkine basan kişinin adresi **ve firması** reddedenler listesine girer (firmadaki başka kişilere de yazılmaz). "Hayır" → kaybedildi, "sonra" → Şimdi Değil playbook'u.
+- **V-44** Demo linki ve analiz raporu adımları Faz 4/7 gelene kadar atlanır (sebep kaydıyla); dizi bir sonraki adıma geçer.
+- **V-45** Worker'da dakika başına tek ulaşma adımı çalışır (taslak / gönderim / gelen kutusu / tek tık sırayla), ücretsiz plandaki istek ve CPU sınırları için. Saatte en fazla 15 mail gönderim denemesi olur; ısınma limitleri bunun çok altındadır.
+- **V-46** Panelden onay yalnızca onay satırını değiştirir (`app.panel_decide_approval`); zamanlama ve stil hafızası Worker'da yapılır (en geç 4 dakika gecikme). Elle düzenlenen metin kişi adını içerdiği için stil hafızasına metin olarak değil "elle düzenlendi" notu olarak yazılır.
+- **V-47** Panelde "yeniden yaz" (talimatla düzeltme) şimdilik yalnızca Telegram'da; panelde düzenle / onayla / reddet var.
+- **V-48** Satış varsayılanları (ayarlardan değişir): görüşme 30 dk; 3 öneri, en erken 4 saat sonra, 10 gün içinde, günde en çok bir öneri, tercih saatleri 10:00 / 14:00 / 11:30 / 16:00; teklif geçerliliği 14 gün; demo için demo başına günde 30, toplamda günde 200 ziyaretçi mesajı.
+- **V-49** Panelin sunucu gerektiren işlemleri (taslak teklif, görüşme saati, görüşme notu, hazırlık notu, demo, teklif gönderildi/kabul/ret) Worker'daki `/panel/:işlem` ucundan yapılır. Kullanıcının kendi Supabase oturumu Supabase Auth ile doğrulanır; TOTP (aal2) ve kiracı üyeliği zorunludur. Yalnızca panel adresinden (CORS) çağrılabilir, her işlem audit'e yazılır.
+- **V-50** Demo linki tahmin edilemez 32 baytlık bir anahtardır. Anahtar veritabanında RLS arkasında tutulur ki panelden yeniden paylaşılabilsin. Ziyaretler sayfa açılışında sayılır; WhatsApp'ın link önizlemesi de bir ziyaret sayılabilir. Ziyaretçinin yazdıkları ayıklanarak modele gider ve saklanmaz, yalnızca sayılır. Canlıda Turnstile zorunludur; IP başına 10 dakikada 20 mesaj sınırı vardır (IP özetlenir, ham hâli saklanmaz).
+- **V-51** Kurucu müşteri indirimi, kontenjan gerçekten açıkken yeni tekliflere varsayılan olarak konur; Timurhan taslakta kaldırabilir. Kontenjan teklif **kabul edildiğinde** düşer ve sayaç veritabanında aşılamaz.
+- **V-52** Takvim etkinlikleri yalnızca Timurhan'ın takvimine katılımcısız eklenir, dışarıya davet gitmez; bu yüzden onay kuyruğuna girmez. Saatleri firmaya iletmek, onaylı bir mesajla olur.
+- **V-53** ⚠️ Sesli görüşme notu yazıya çevrilirken (Groq Whisper, ücretsiz katman) ayıklanamaz. Bu yüzden Papi, sesli notta kişi adı ve telefon söylenmemesini hatırlatır. Yazılı notlar ve sesli notun yazıya çevrilmiş hâli, modele gitmeden ayıklanır (K-4.9).
+- **V-54** Mail bağlanana kadar (A-1) teklif şöyle gönderilir: PDF panelde oluşur, WhatsApp tek tıkla ya da elle gönderilir, ardından "Gönderildi" işaretlenir. Teklif Takibi dizisi "gönderildi" anında başlar.
+- **V-55** Kabul edilen teklifin firması "Kazanıldı" olur ve sıradaki adımı "kurulum formu ve proje" (Faz 5) olarak 1 gün sonraya bekler. Reddedilen teklifin firması "Kaybedildi" olur ve 90 gün sonra yeniden değerlendirilir.
+- **V-56** Görüşme notu, firmanın önerilmiş ya da planlanmış görüşmesi varsa ona yazılır; yoksa yeni bir "yapıldı" görüşmesi açılır. Model bir paket önerirse teklif taslağı kendiliğinden çıkar, KDV sorusu sorulur, ardından onaya gider.
+- **V-57** Soğuk Ana'nın demo adımı (G7) artık gerçek bir 14 günlük demo oluşturur. Link e-postayla gider, e-posta yoksa WhatsApp tek tıkla; her iki durumda da Ulak taslağı yazar ve Timurhan onaylar. Bu V-44'ün demo kısmının yerini alır.
+- **V-58** Teklif PDF yazı tipi Noto Sans'tır (OFL), Latin ve Türkçe karakterlere göre önceden küçültülmüştür (~29 KB). PDF yaklaşık 40 KB tutar; pdf-lib'in kendi küçültmesi glif kaybettiği için kullanılmaz.
+- **V-59** Operasyon varsayılanları (ayarlardan değişir): kurulum formu linki 30 gün açık; vadesi geçen ödeme 3 gün sonra Telegram'a bir kez bildirilir. Aylık tahsilatlar her sabah 09:05'te, aylık müşteri raporu taslakları her ayın 1'inde 09:20'de hazırlanır.
+- **V-60** Playbook'larda tekrarlayan adımlar (Müşteri Yaşamı "aylık rapor") dizi motorunda atlanır; aylık raporu kendi zamanlayıcısı hazırlar. Kazanılmış firmanın dizisi bitince firma bekleme listesine düşmez, sıradaki adımı projeye aittir.
+- **V-61** "Kabul edildi" derken ödeme yolu seçilir (kurulumsuz / kurulumlu; Özel projede tek seçenek). Proje başlangıcı kabul günüdür; sözleşme sonu taahhüt süresinin bitiminden bir gün öncedir. İlk aylık ödeme kabul günü, sonrakiler her ay aynı gün (en geç 28'i) vadelenir. Kurucu indirimi ilk aylara yansır.
+- **V-62** Kurulum formu linki müşteriye, onaylı bir mesajla gider (şablon, model yok). Form bir kez gönderilir; sonra yalnızca panelden düzeltilir.
+- **V-63** Claude Code promptu proje açılır açılmaz geçici olarak üretilir. Form gelince yapılandırma dosyası (`papi-config.json`) ve kontrol listesiyle birlikte yeniden üretilir. Müşterinin iletişim bilgileri prompta değil yapılandırma dosyasına girer.
+- **V-64** Teslim edilen modüller aylık sayıları kişisel veri olmadan, projeye özel bir anahtarla Papi'ye gönderir. Aylık rapor yalnızca şablonla hazırlanır ve onayla gider.
+- **V-65** Cevap asistanında mesajlar saklanmaz, yalnızca sayılır. Telefon ya da e-posta bırakan mesaj işletme sahibine Telegram'dan bildirilir; bu bildirim müşterinin kendi hesabında olur. `/chat` için Cloudflare hız sınırı kuralı önerilir.
+- **V-66** Not araması şimdilik metin ve etiketle yapılır. Notların anlam araması (embedding), kişisel veri ayıklamasıyla Faz 6'da Papi'nin hafızasına bağlanır.
+- **V-67** Gece vardiyası varsayılanları: bölge `Balıkesir`, sektörler klinik/emlak/oto/otel/eğitim/inşaat, gece en fazla
+  2 OSM araması (30 dakikada bir) ve 10 taslak; taslak bütçesi dolunca dizi ilerletme sabaha kalır. Ayarlardan değişir.
+- **V-68** Faz 5'teki sabit zamanlı işler (09:05 tahsilat kontrolü, ayın 1'i müşteri raporları) artık rutin
+  (`odeme_gecikme`, `aylik_musteri_raporlari`); saatleri Rutinler ekranından değişir. 10 hazır rutin seed'de.
+- **V-69** Kuyruktaki `unique` seçeneği iş **türüne** göre tekilleştirir; bu yüzden rutin çalıştırma ve cevap taslağı
+  işleri `unique` kullanmaz (aksi halde aynı anda iki rutin/iki cevap kaybolurdu). Rutin aynı vakti iki kez
+  çalıştırmaz: kuyruğa koyarken sıradaki zamana geçer.
+- **V-70** İlk kez görülen (veya yeniden açılan / saati değişen) rutin hemen çalışmaz; yalnızca sıradaki zamanı
+  hesaplanır.
+- **V-71** OSM "yeni açılan işletme" sinyali: bir bölge×sektör ilk kez tarandığında bulunanlar sinyal sayılmaz (zaten
+  vardılar); sonraki haftalık taramalarda yeni görünenler `new_opening` sinyali olur. Haftalık çalışmada en fazla 6
+  bölge×sektör sorgusu (Overpass nezaketi), sıra döner.
+- **V-72** Sinyal, açık (analiz edilmiş / bekleme / yeni) firmayı Sinyal playbook'una alır ve yeniden analiz/puanlama
+  kuyruğa girer. Aynı değişiklik aynı ISO haftasında bir kez kaydedilir (fingerprint).
+- **V-73** Kazanılmış müşteriye (projeye bağlı ya da aşaması `won` firmaya) ait notlar hiç embedding'e gitmez; diğer
+  notlar kişisel veri ayıklanarak gömülür. Papi'nin `search_notes` aracı sonuçları da ayıklanmış döner.
+- **V-74** Konum bir adres için bir kez aranır (bulunsun ya da bulunmasın, `geocoded_at`); adres değişirse yeniden
+  aranır. Birikmiş adresler kovalanmaz: her Actions çalışmasında ≤20 adres (≈5 dk).
+- **V-75** Kalem içerikleri onaydan sonra panelde paylaşıma hazır olur: X için önceden doldurulmuş paylaşım linki;
+  LinkedIn ve Instagram'da önceden doldurma linki olmadığından "Metni kopyala + aç". "Paylaştım" ile kayda geçer.
+- **V-76** Ölçütler: ilk cevap süresi = firma başına ilk gönderilen temastan sonraki ilk cevaba kadar geçen saat,
+  firmaların medyanı. Kanal filtresi temas ve cevaplara uygulanır; görüşme/teklif/kazanım kanaldan bağımsız.
+  GitHub Actions dakikaları API ile değil, GitHub ayarlarından izlenir.
+- **V-77** Ziyaret rotası kuş uçuşu en yakın komşu sırasıdır (ücretsiz rota servisi yok); başlangıç noktası
+  ayarlardan (`intelligence.home`). Yazdırılabilir sayfada kişi bilgisi yer almaz.
+- **V-78** Analiz aracı raporu ek model çağrısı yapmaz: analizin (herkese açık veriden) bulguları + kural tabanlı
+  önerilerle şablondan üretilir. "Yorum yönetimi" bölümü genel öneridir; Google yorumları okunmaz (Places kapalı).
+- **V-79** Rapor linkinin açık değeri yalnızca iş kuyruğundaki yükte bulunur (mail linki için); istek satırında
+  yalnızca özeti tutulur. Aynı IP'den saatte 3, günde toplam 20 istek (ayarlardan). Reddedenler listesindeki kişiye
+  rapor ekranda gösterilir ama mail gitmez.
+- **V-80** Analiz aracı maili onaysız gider ama merkezi korumadan geçer (çıkış linki, reddedenler listesi); kişi
+  istediği için haftalık temas sayısına ve günlük mail limitine sayılmaz, iş saatini beklemez.
+- **V-81** Sesli konuşmada dışarı gidecek istekler `#taslak` etiketli not olarak kaydedilir; asıl mesaj taslağı
+  Telegram veya panelden hazırlanıp onaya düşer. Sesli konuşma özeti Papi'nin Telegram geçmişine eklenir.
+- **V-82** Sesli konuşma süresi token başına en çok 10 dakikalık parçalarla önceden ayrılır; bitince kullanılmayan
+  süre iade edilir. Bitiş bildirilmezse ayrılan süre harcanmış sayılır. Live model adı ayarlarda
+  (`live_voice.model`) ve masaüstünde doğrulanacak; token API adresi (`v1alpha/auth_tokens`) önizlemede.
+- **V-83** Müşteri portalı panelden ayrı bir uygulamadır (`/portal`), TOTP istemez; müşteri hiçbir tabloyu
+  doğrudan okuyamaz, yalnızca `app.portal_project()` ile kendi projesini görür (durum, adımlar, ödemeler, aylık
+  sayılar). Bayrak kapalıyken giriş yapan müşteri oturumdan çıkarılır.
+- **V-84** Yedek yalnızca veridir (`public`, `app`, giriş hesapları); şema migration'lardan gelir. Geri yükleme
+  testi her pazar şifrelemeden önce yapılır; şifre çözme testi gizli anahtar gerektirdiği için ayda bir elle
+  yapılması önerilir (`docs/yedekten-geri-yukleme.md`).
+- **V-85** Saklama süresi: kazanılmamış firmada son 12 ayda temas/cevap/görüşme yoksa kişiler silinir, firma
+  e-posta/telefon/Instagram alanları boşaltılır, mesaj içerikleri silinir; firma adı ve sayılar kalır. Tek tık
+  silmede adresler ayrıca reddedenler listesine girer ve kayıt "kapalı" olur.
+- **V-86** Ücretsiz limit görünümündeki Actions ve Worker değerleri tahmindir (zamanlanmış işler + ağır iş
+  çalışmaları; dakikalık zamanlayıcı + Telegram + panel + herkese açık istekler). Gerçek değerler sağlayıcı
+  panellerindedir.

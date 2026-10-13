@@ -1,0 +1,104 @@
+name: Nightly backup
+
+# K-17.5 / K-17.9: data-only pg_dump → age encryption → Actions artifact (30 days; the 1st of the month
+# 90 days). The dump is restored into a throwaway Postgres built from our migrations every Sunday
+# (or on demand) before it is encrypted, and row counts are compared with the manifest.
+# Budget: ~2 min/night, ~4 min on Sundays ≈ 70 Actions minutes/month.
+on:
+  schedule:
+    - cron: '23 1 * * *' # 04:23 Istanbul
+  workflow_dispatch:
+    inputs:
+      restore_check:
+        description: 'Geri yükleme testini de çalıştır'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+    steps:
+      - name: Skip until configured
+        id: cfg
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL not set yet; nothing to back up."; echo "ready=false" >> "$GITHUB_OUTPUT"
+          else echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.cfg.outputs.ready == 'true'
+        uses: actions/checkout@v5
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Require an encryption key (never upload a plain dump)
+        run: |
+          if ! grep -q '^age1' ops/backup/age-recipients.txt; then
+            echo "::error::ops/backup/age-recipients.txt has no age public key"; exit 1
+          fi
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Install Postgres 17 tools, pgvector and age
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -q
+          sudo apt-get install -yq postgresql-17 postgresql-17-pgvector age
+          echo "PGBIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Dump
+        run: scripts/backup/dump.sh out
+      - if: steps.cfg.outputs.ready == 'true'
+        id: weekly
+        name: Restore check today? (Sundays, or when asked)
+        env:
+          ASKED: ${{ github.event_name == 'workflow_dispatch' && inputs.restore_check }}
+        run: |
+          if [ "$ASKED" = "true" ] || { [ "${{ github.event_name }}" = "schedule" ] && [ "$(TZ=Europe/Istanbul date +%u)" = "7" ]; }; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.weekly.outputs.run == 'true'
+        name: Restore check
+        run: scripts/backup/restore-check.sh out/papi.dump out/manifest.json | tee out/restore-check.txt
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Encrypt
+        run: |
+          stamp="$(TZ=Europe/Istanbul date +%F)"
+          mkdir enc
+          tar -C out -cf - papi.dump $( [ -f out/auth.dump ] && echo auth.dump ) manifest.json \
+            | age -R ops/backup/age-recipients.txt -o "enc/papi-$stamp.tar.age"
+          cp out/manifest.json "enc/manifest-$stamp.json"
+          [ -f out/restore-check.txt ] && cp out/restore-check.txt enc/ || true
+          rm -rf out
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          echo "MONTHLY=$( [ "$(TZ=Europe/Istanbul date +%d)" = "01" ] && echo true || echo false )" >> "$GITHUB_ENV"
+      - if: steps.cfg.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: papi-backup-${{ env.STAMP }}
+          path: enc/
+          retention-days: ${{ env.MONTHLY == 'true' && 90 || 30 }}
+          if-no-files-found: error
+      - if: failure() && steps.cfg.outputs.ready == 'true'
+        name: Tell Timurhan
+        run: |
+          [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_OWNER_ID" ] || exit 0
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_OWNER_ID}" \
+            --data-urlencode "text=⚠️ Gece yedeği başarısız oldu: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null
+      - if: success() && steps.weekly.outputs.run == 'true'
+        name: Weekly restore check result
+        run: |
+          [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_OWNER_ID" ] || exit 0
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_OWNER_ID}" \
+            --data-urlencode "text=✅ Haftalık yedek geri yükleme testi geçti (${STAMP}): tüm tablo sayıları eşleşti." >/dev/null

@@ -31,14 +31,15 @@ insert into public.playbook_steps
 select p.tenant_id, p.id, s.position, s.day_offset, s.anchor, s.repeat_every_days, s.channel::public.channel,
        s.angle, s.conditions::jsonb, s.requires_approval, s.approval_exempt_kind
 from (values
-  -- Soğuk Ana (V-13: brief says 8 touches but lists 7; the 7 listed are seeded)
+  -- Soğuk Ana (K-11.7: 8th touch is a LinkedIn message on day 17)
   ('soguk_ana', 1, 1, 'start', null::int, 'email', 'Analizden tek somut bulgu, en fazla 80 kelime', '{"requires": ["email"]}', true, null::text),
   ('soguk_ana', 2, 3, 'start', null, 'whatsapp', 'Maile kısa atıf', '{"requires": ["phone"]}', true, null),
   ('soguk_ana', 3, 5, 'start', null, 'instagram_dm', 'Kısa, samimi DM', '{"requires": ["instagram"]}', true, null),
   ('soguk_ana', 4, 7, 'start', null, 'demo', 'Kişiye özel 60 sn ekran kaydı demo veya kişiye özel demo linki', '{}', true, null),
   ('soguk_ana', 5, 10, 'start', null, 'phone_call', 'Timurhan arar; Papi konuşma notu hazırlar', '{"requires": ["phone"]}', false, null),
   ('soguk_ana', 6, 14, 'start', null, 'email', 'Kısa fikir veya örnek', '{"requires": ["email"]}', true, null),
-  ('soguk_ana', 7, 21, 'start', null, 'email', '"Dosyanızı kapatayım mı" kapanış maili', '{"requires": ["email"]}', true, null),
+  ('soguk_ana', 7, 17, 'start', null, 'linkedin', 'Kısa LinkedIn mesajı, önceki temaslara atıf', '{"requires": ["linkedin"]}', true, null),
+  ('soguk_ana', 8, 21, 'start', null, 'email', '"Dosyanızı kapatayım mı" kapanış maili', '{"requires": ["email"]}', true, null),
   -- Hafif Soğuk (V-14)
   ('hafif_soguk', 1, 1, 'start', null, 'email', 'Analizden tek somut bulgu, en fazla 80 kelime', '{"requires": ["email"]}', true, null),
   ('hafif_soguk', 2, 4, 'start', null, 'whatsapp', 'Maile kısa atıf', '{"requires": ["phone"]}', true, null),

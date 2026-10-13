@@ -8,6 +8,7 @@ import {
   Inbox,
   Link2,
   Map,
+  Mic,
   MonitorPlay,
   NotebookPen,
   PenTool,
@@ -127,6 +128,13 @@ export const panelModules: PanelModule[] = [
     description: 'Gelir, huni, müşteri ve sistem sağlığı.',
     phase: 6,
     icon: BarChart3,
+  },
+  {
+    path: '/konus',
+    label: 'Papi ile konuş',
+    description: 'Canlı sesli konuşma; bilgi bankası, notlar ve CRM üzerinden.',
+    phase: 7,
+    icon: Mic,
   },
   {
     path: '/baglantilar',

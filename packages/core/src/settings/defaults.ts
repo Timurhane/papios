@@ -34,21 +34,92 @@ export const defaultSettings: Settings = {
     { name: 'Marmara', priority: 2 },
     { name: 'Türkiye', priority: 3 },
   ],
-  // K-4.3, K-4.4: model ids and limits are filled in Phase 1 after verifying provider docs
+  // K-4.3, K-4.4. Model aliases and conservative limits are assumption V-25: confirm against the
+  // AI Studio / Groq console quota pages during live setup.
   llm: {
     routing: {
-      light: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
-      medium: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
-      heavy: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
+      light: {
+        provider: 'gemini',
+        model: 'gemini-flash-lite-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      },
+      medium: {
+        provider: 'gemini',
+        model: 'gemini-flash-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-120b' },
+      },
+      heavy: {
+        provider: 'gemini',
+        model: 'gemini-flash-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-120b' },
+      },
     },
+    embedding: { provider: 'gemini', model: 'gemini-embedding-001', dimensions: 768 },
+    transcription: { provider: 'groq', model: 'whisper-large-v3-turbo', language: 'tr' },
+    // V-26: Gemini TTS needs no extra account; off until a model id is set.
+    speech: { provider: 'gemini', model: null, voice: null },
     quotas: {
-      gemini: { enabled: true, rpm: null, rpd: null, free_tier: true },
-      groq: { enabled: true, rpm: null, rpd: null, free_tier: true },
-      anthropic: { enabled: false, rpm: null, rpd: null, free_tier: false },
+      gemini: {
+        enabled: true,
+        rpm: 10,
+        rpd: 250,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      gemini_embed: {
+        enabled: true,
+        rpm: 60,
+        rpd: 800,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      // K-8.1: grounding with Google Search, free tier shared ~500/day across Flash models (to be confirmed).
+      gemini_ground: {
+        enabled: true,
+        rpm: 5,
+        rpd: 100,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      gemini_speak: {
+        enabled: true,
+        rpm: 3,
+        rpd: 15,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      groq: { enabled: true, rpm: 20, rpd: 1000, day_timezone: 'UTC', free_tier: true },
+      groq_transcribe: { enabled: true, rpm: 15, rpd: 1500, day_timezone: 'UTC', free_tier: true },
+      anthropic: { enabled: false, rpm: null, rpd: null, day_timezone: 'UTC', free_tier: false },
     },
+    cache_ttl_days: 30,
+    max_agent_steps: 4,
   },
+  // V-41: signature and sender until Timurhan edits them in Settings
+  outreach: {
+    sender_name: 'Timurhan | AJNA Digital',
+    signature: 'Timurhan\nAJNA Digital · ajnadigitalagency.com',
+    cold_playbooks: ['soguk_ana', 'hafif_soguk', 'sinyal', 'uyandirma'],
+    drafts_per_tick: 2,
+  },
+  telegram: { voice_replies: false, approvals_per_message: 8 },
   // K-15.5
-  night_shift: { auto_window: null, urgent_as_silent: true },
+  night_shift: {
+    auto_window: null,
+    urgent_as_silent: true,
+    // V-67
+    areas: ['Balıkesir'],
+    sectors: ['clinic', 'real_estate', 'auto', 'hotel', 'education', 'construction'],
+    max_searches_per_night: 2,
+    max_drafts_per_night: 10,
+  },
+  // K-8.11, K-10.7 (V-67)
+  intelligence: {
+    signal_min_score: 60,
+    competitors: [],
+    news_sectors: ['klinik', 'emlak', 'otel', 'oto galeri'],
+    home: { lat: 39.6484, lng: 27.8826 },
+  },
   // K-15.4
   notifications: {
     hot_reply: true,
@@ -67,9 +138,37 @@ export const defaultSettings: Settings = {
   // K-16.1: target set by Timurhan
   revenue_target: { monthly_kurus: null },
   // K-12.5; default value is assumption V-12
-  analysis_tool: { daily_limit: 20 },
+  analysis_tool: {
+    daily_limit: 20,
+    per_ip_per_hour: 3,
+    report_days: 30,
+    consent_version: '2026-10',
+    privacy_url: null,
+  },
+  // Verified limits (docs/free-tier-limits.md); scheduled minutes from the workflow budgets (K-3.17)
+  free_limits: {
+    db_mb: 500,
+    storage_mb: 1024,
+    actions_minutes_month: 2000,
+    actions_scheduled_minutes: 430,
+    actions_minutes_per_run: 3,
+    workers_requests_day: 100_000,
+  },
+  // K-15.7 (E-3); model id per Gemini Live docs, checked at desktop setup
+  live_voice: { daily_minutes: 20, model: 'gemini-live-2.5-flash-preview' },
   // K-13.7
-  demo: { ttl_days: 14 },
+  demo: { ttl_days: 14, messages_per_demo_per_day: 30, messages_total_per_day: 200 },
+  // Phase 5 (assumption V-59)
+  operations: { setup_form_valid_days: 30, overdue_grace_days: 3 },
+  // Phase 4 sales defaults (assumption V-48)
+  sales: {
+    meeting_minutes: 30,
+    slot_count: 3,
+    slot_lead_hours: 4,
+    slot_horizon_days: 10,
+    preferred_times: ['10:00', '14:00', '11:30', '16:00'],
+    proposal_valid_days: 14,
+  },
   // K-7.3, K-7.4
   pricing: {
     no_setup_path: { commitment_months: 12, first_month_upfront: true },
