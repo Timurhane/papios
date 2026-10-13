@@ -2,3 +2,7 @@
 export * from './repo/types.ts';
 export { SupabaseRepo } from './repo/supabase.ts';
 export { MemoryRepo } from './repo/memory.ts';
+export * from './services/analist.ts';
+export * from './services/kasif.ts';
+export * from './adapters/instagram.ts';
+export * from './adapters/places.ts';
