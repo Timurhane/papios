@@ -41,6 +41,10 @@ Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
 
 ## 2. GitHub Actions secrets
 
+> **Yenileme:** `SUPABASE_ACCESS_TOKEN` 90 günlük (oluşturma 2026-10-13 → bitiş ~2027-01-11).
+> Bitmeden yeni token alınıp GitHub secret'ı güncellenir. (Faz 6 rutinlerine "anahtar süresi yaklaşıyor"
+> hatırlatması eklenecek.)
+
 1. Supabase → sağ üst profil → **Account preferences → Access Tokens → Generate new token**, adı `papi-github-actions`.
 2. GitHub → `Timurhane/papios` → **Settings → Secrets and variables → Actions → New repository secret**:
    - `SUPABASE_ACCESS_TOKEN` = az önce aldığın token
