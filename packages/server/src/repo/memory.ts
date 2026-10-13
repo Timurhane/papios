@@ -39,6 +39,7 @@ import type {
   ProposalStatus,
   Repo,
   RoutineRow,
+  ToolRequestRow,
   SalesStats,
   SuggestionRow,
   ServicePackage,
@@ -1311,6 +1312,47 @@ export class MemoryRepo implements Repo {
   }
   async searchNotesByVector(_e: number[], limit: number) {
     return this.noteVectors.slice(0, limit);
+  }
+
+  toolRequests: ToolRequestRow[] = [];
+  async createToolRequest(
+    r: Pick<
+      ToolRequestRow,
+      | 'company_id'
+      | 'email'
+      | 'query'
+      | 'consent_at'
+      | 'consent_version'
+      | 'token_hash'
+      | 'expires_at'
+    >,
+  ) {
+    const id = this.id();
+    this.toolRequests.push({
+      ...r,
+      id,
+      status: 'queued',
+      report: null,
+      mailed_at: null,
+      created_at: this.now().toISOString(),
+    });
+    return id;
+  }
+  async getToolRequest(id: string) {
+    return this.toolRequests.find((r) => r.id === id) ?? null;
+  }
+  async toolRequestByTokenHash(hash: string) {
+    return this.toolRequests.find((r) => r.token_hash === hash) ?? null;
+  }
+  async updateToolRequest(
+    id: string,
+    patch: Partial<Pick<ToolRequestRow, 'status' | 'report' | 'mailed_at' | 'email'>>,
+  ) {
+    const r = this.toolRequests.find((x) => x.id === id);
+    if (r) Object.assign(r, patch);
+  }
+  async toolRequestsSince(since: Date) {
+    return this.toolRequests.filter((r) => Date.parse(r.created_at) >= since.getTime()).length;
   }
 }
 

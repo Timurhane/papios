@@ -5,6 +5,13 @@ import { handleUpdate } from './bot.ts';
 import { demoExpiredPage, demoNotFoundPage, demoPage, handleDemoChat } from './demo.ts';
 import { authenticatePanel, isPanelAction, PanelError, runPanelAction } from './panel-api.ts';
 import { renderSetupForm, submitSetupForm, type SetupFormDeps } from './setup-form.ts';
+import {
+  handleToolSubmit,
+  toolFormPage,
+  toolPrivacyPage,
+  toolReportByToken,
+  toolReportPage,
+} from './tool-page.ts';
 import { acceptMetrics } from '@papi/server';
 import type { AppDeps } from './deps.ts';
 import { isConfigured, missingSecrets, parseEnv, type ConfiguredEnv } from './env.ts';
@@ -128,6 +135,74 @@ export function createApp(opts: AppOptions = {}) {
       c.req.header('cf-connecting-ip') ?? null,
     );
     return c.json(r.body, r.status);
+  });
+
+  // K-12 analysis tool: public form (Turnstile, per-IP and daily limits), embeddable on the AJNA site.
+  const embedHeaders = (
+    c: { header: (k: string, v: string) => void },
+    env: { ANALYSIS_EMBED_ORIGINS?: string | undefined },
+  ) => {
+    c.header(
+      'content-security-policy',
+      `frame-ancestors 'self' ${env.ANALYSIS_EMBED_ORIGINS ?? ''}`.trim(),
+    );
+    c.header('referrer-policy', 'strict-origin-when-cross-origin');
+    c.header('cache-control', 'no-store');
+  };
+  app.get('/analiz', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.html(toolPrivacyPage(), 503);
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    const s = await deps.repo.getSettings();
+    embedHeaders(c, env);
+    return c.html(
+      toolFormPage({
+        turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
+        privacyUrl: s.analysis_tool.privacy_url ?? '/analiz/aydinlatma',
+      }),
+    );
+  });
+  app.get('/analiz/aydinlatma', (c) => c.html(toolPrivacyPage()));
+  app.post('/analiz', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.html(toolPrivacyPage(), 503);
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    if (!deps.tool) return c.html(toolPrivacyPage(), 503);
+    const raw = await c.req.parseBody();
+    const form = Object.fromEntries(
+      Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string'),
+    );
+    const r = await handleToolSubmit(
+      {
+        tool: deps.tool,
+        repo: deps.repo,
+        turnstileSecret: env.TURNSTILE_SECRET_KEY ?? null,
+        requireTurnstile: env.APP_ENV === 'production',
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      },
+      form,
+      c.req.header('cf-connecting-ip') ?? null,
+    );
+    embedHeaders(c, env);
+    if ('redirect' in r) return c.redirect(r.redirect, 303);
+    const s = await deps.repo.getSettings();
+    return c.html(
+      toolFormPage({
+        turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
+        privacyUrl: s.analysis_tool.privacy_url ?? '/analiz/aydinlatma',
+        error: r.error,
+        values: { query: form.query ?? '', email: form.email ?? '' },
+      }),
+      r.status,
+    );
+  });
+  app.get('/analiz/r/:token', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.html(toolPrivacyPage(), 503);
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    const page = toolReportPage(await toolReportByToken({ repo: deps.repo }, c.req.param('token')));
+    embedHeaders(c, env);
+    return c.html(page.html, page.status);
   });
 
   // K-14.4 setup form: public, unguessable token, Turnstile in production.

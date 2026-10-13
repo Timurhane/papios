@@ -7,6 +7,7 @@ import {
   type FetchedSite,
   type LLMService,
   type PageSpeedResult,
+  type SiteSignals,
   type SummaryOutput,
 } from '@papi/core';
 import type { CompanyRow, Repo } from '../repo/types.ts';
@@ -34,6 +35,12 @@ export interface AnalysisOutcome {
   rationale: string[];
   /** The site could not be read over plain HTTP; a Playwright crawl is queued. */
   needsDeepCrawl: boolean;
+  /** Raw checks, for the analysis tool report (K-12.3). */
+  checks?: {
+    site: SiteSignals | null;
+    mobile: PageSpeedResult | null;
+    desktop: PageSpeedResult | null;
+  };
 }
 
 const SUMMARY_BATCH = 5;
@@ -241,6 +248,7 @@ export async function analyzeCompanies(
       findings,
       rationale: scored.score.rationale,
       needsDeepCrawl: false,
+      checks: { site: g.site?.signals ?? null, mobile: g.mobile, desktop: g.desktop },
     });
   }
   return outcomes;

@@ -22,6 +22,7 @@ export async function runCron(deps: AppDeps, now: Date): Promise<void> {
     ...(deps.sales ? { sales: deps.sales } : {}),
     ...(deps.ops ? { ops: deps.ops } : {}),
     ...(deps.automation ? { automation: deps.automation } : {}),
+    ...(deps.tool ? { tool: deps.tool } : {}),
   };
   for (const job of scheduledJobs(now))
     await deps.repo.enqueue(job.type, job.payload, { unique: true });

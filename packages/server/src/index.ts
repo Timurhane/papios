@@ -14,3 +14,4 @@ export * from './services/calendar.ts';
 export * from './services/demo.ts';
 export * from './services/operator.ts';
 export * from './services/automation.ts';
+export * from './services/tool.ts';

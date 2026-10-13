@@ -702,4 +702,40 @@ export interface Repo {
     embedding: number[],
     limit: number,
   ): Promise<{ id: string; body: string; created_at: string; score: number }[]>;
+
+  // --- Phase 7: analysis tool ---
+  createToolRequest(
+    r: Pick<
+      ToolRequestRow,
+      | 'company_id'
+      | 'email'
+      | 'query'
+      | 'consent_at'
+      | 'consent_version'
+      | 'token_hash'
+      | 'expires_at'
+    >,
+  ): Promise<string>;
+  getToolRequest(id: string): Promise<ToolRequestRow | null>;
+  toolRequestByTokenHash(hash: string): Promise<ToolRequestRow | null>;
+  updateToolRequest(
+    id: string,
+    patch: Partial<Pick<ToolRequestRow, 'status' | 'report' | 'mailed_at' | 'email'>>,
+  ): Promise<void>;
+  toolRequestsSince(since: Date): Promise<number>;
+}
+
+export interface ToolRequestRow {
+  id: string;
+  company_id: string | null;
+  email: string | null;
+  query: string;
+  consent_at: string;
+  consent_version: string;
+  token_hash: string;
+  status: 'queued' | 'ready' | 'failed';
+  report: Record<string, unknown> | null;
+  mailed_at: string | null;
+  created_at: string;
+  expires_at: string;
 }

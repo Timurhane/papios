@@ -245,14 +245,24 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
   GitHub Actions'ta toplu konumlandırılır. _Uygulama notu:_ resmi politika düzenli çalışan betikleri dakikada 4
   istekle sınırlıyor; bu yüzden "saniyede 1" yerine 15 saniyede 1 istek kullanılıyor (karar özü aynı, daha sıkı uyum).
 
+## Faz 7 kararları (2026-10-13, Timurhan "önerilerini yap" ile onayladı)
+
+- **K-17.9** (E-1, A-5) Yedek hedefi: GitHub Actions artifact; günlük yedek 30 gün, ayın ilk yedeği 90 gün saklanır.
+  Yedek `age` ile şifrelidir (açık anahtar repoda, gizli anahtar yalnızca Timurhan'da). GitHub Free'de artifact +
+  Packages için hesap başına 500 MB (doğrulandı, bkz. free-tier-limits.md).
+- **K-12.6** (E-2) Analiz aracı Worker'da `/analiz`; AJNA sitesine iframe ile gömülür. Rapor ekranda tahmin edilemez
+  linkle 30 gün gösterilir; mail bağlandığında (A-1) ayrıca e-postayla gider.
+- **K-15.7** (E-3) Canlı sesli konuşmada Papi yalnızca okuma araçlarını (bilgi bankası, notlar, firma arama, günün
+  özeti, kota) ve not alma / sessiz modu kullanır; dışarı giden her şey onay kuyruğuna taslak düşer, sesle onay
+  verilmez. Günlük varsayılan 20 dakika.
+
 ## Açık kararlar (Timurhan onayı bekliyor)
 
-| #   | Konu                                                           | Ne zaman gerekli                              |
-| --- | -------------------------------------------------------------- | --------------------------------------------- |
-| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)          | Masaüstü kurulum oturumu (Faz 3 canlı kabulü) |
-| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)       | Faz 1                                         |
-| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5) | Faz 7 (ama Faz 0'da bilinmesi iyi)            |
-| A-6 | KDV dahil/hariç (K-7.2)                                        | İlk teklifte                                  |
+| #   | Konu                                                     | Ne zaman gerekli                              |
+| --- | -------------------------------------------------------- | --------------------------------------------- |
+| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)    | Masaüstü kurulum oturumu (Faz 3 canlı kabulü) |
+| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9) | Faz 1                                         |
+| A-6 | KDV dahil/hariç (K-7.2)                                  | İlk teklifte                                  |
 
 ## Varsayımlar
 

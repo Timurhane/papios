@@ -226,7 +226,7 @@ async function createStepTouch(
     await deps.repo.createTouch({
       ...base,
       status: 'skipped',
-      skip_reason: 'Analiz aracı raporu Faz 7’de geliyor',
+      skip_reason: 'Rapor analiz aracından ekranda ve (mail bağlıysa) e-postayla gönderildi',
     });
     return 'skipped';
   }

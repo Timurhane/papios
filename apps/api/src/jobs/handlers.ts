@@ -11,9 +11,11 @@ import {
   draftReply,
   findWebsiteByName,
   runRoutine,
+  runToolAnalysis,
   formatOutcome,
   upsertCompany,
   type AutomationDeps,
+  type ToolDeps,
   type InstagramDiscovery,
   type OpsDeps,
   type SalesDeps,
@@ -38,6 +40,8 @@ export interface JobDeps {
   ops?: OpsDeps;
   /** Phase 6: routines. */
   automation?: AutomationDeps;
+  /** Phase 7: analysis tool. */
+  tool?: ToolDeps;
 }
 
 const EMBED_BATCH = 16;
@@ -125,6 +129,15 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
             await repo.enqueue('embed.missing', {}, { runAfter: new Date(Date.now() + 60_000) });
           return; // one table per run keeps the cron tick inside the subrequest budget
         }
+      })
+      // K-12: analysis tool request → report (on screen, and by mail when connected).
+      .register('tool.analyze', async (job) => {
+        if (!deps.tool) return;
+        await runToolAnalysis(
+          deps.tool,
+          String(job.payload.requestId ?? ''),
+          typeof job.payload.token === 'string' ? job.payload.token : undefined,
+        );
       })
       // Routines (K-13.5): queued by the cron tick when due; actions come from an allowlist.
       .register('routine.run', async (job) => {

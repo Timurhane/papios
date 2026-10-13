@@ -145,7 +145,22 @@ export const settingsSchemas = {
   }),
   vat: z.object({ mode: z.enum(['unspecified', 'included', 'excluded']) }),
   revenue_target: z.object({ monthly_kurus: kurus.nullable() }),
-  analysis_tool: z.object({ daily_limit: z.number().int().positive() }),
+  analysis_tool: z.object({
+    daily_limit: z.number().int().positive(),
+    /** Requests per IP per hour (IP is hashed, K-17.4). */
+    per_ip_per_hour: z.number().int().positive(),
+    /** How long the on-screen report link stays open (K-12.6). */
+    report_days: z.number().int().positive(),
+    /** Version of the consent text shown with the form; stored with each request (K-17.7). */
+    consent_version: z.string().min(1),
+    /** Public privacy notice the form links to; null shows the built-in notice. */
+    privacy_url: z.string().nullable(),
+  }),
+  live_voice: z.object({
+    /** K-15.7: daily speaking minutes in the panel. */
+    daily_minutes: z.number().int().positive(),
+    model: z.string().min(1),
+  }),
   demo: z.object({
     ttl_days: z.number().int().positive(),
     /** Visitor messages per demo per day and across all demos per day (public endpoint, K-17.4). */

@@ -19,6 +19,7 @@ import {
   type OpsDeps,
   type OutreachDeps,
   type SalesDeps,
+  type ToolDeps,
 } from '@papi/server';
 import { notify } from './notify.ts';
 import type { Repo } from '@papi/server';
@@ -42,6 +43,8 @@ export interface AppDeps {
   publicApiUrl?: string;
   /** Operations (Phase 5): projects, setup forms, finance, reports. */
   ops?: OpsDeps;
+  /** Phase 7: analysis tool (K-12). */
+  tool?: ToolDeps;
   /** Phase 6: routines, night shift, signals, Kalem, learning. */
   automation?: AutomationDeps;
   /** Injected in tests for outbound calls made by route handlers (Supabase Auth check). */
@@ -126,6 +129,16 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
       notify: opsNotify,
     },
     ops,
+    tool: {
+      repo,
+      llm,
+      ...(outreach ? { outreach } : {}),
+      ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
+      ...(env.PAGESPEED_API_KEY ? { pageSpeedKey: env.PAGESPEED_API_KEY } : {}),
+      notify: async (kind, text) => {
+        await notify({ repo, tg, ownerChatId: env.TELEGRAM_OWNER_ID }, kind, text);
+      },
+    },
     automation: {
       repo,
       llm,

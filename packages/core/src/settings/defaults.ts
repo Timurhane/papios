@@ -138,7 +138,15 @@ export const defaultSettings: Settings = {
   // K-16.1: target set by Timurhan
   revenue_target: { monthly_kurus: null },
   // K-12.5; default value is assumption V-12
-  analysis_tool: { daily_limit: 20 },
+  analysis_tool: {
+    daily_limit: 20,
+    per_ip_per_hour: 3,
+    report_days: 30,
+    consent_version: '2026-10',
+    privacy_url: null,
+  },
+  // K-15.7 (E-3); model id per Gemini Live docs, checked at desktop setup
+  live_voice: { daily_minutes: 20, model: 'gemini-live-2.5-flash-preview' },
   // K-13.7
   demo: { ttl_days: 14, messages_per_demo_per_day: 30, messages_total_per_day: 200 },
   // Phase 5 (assumption V-59)

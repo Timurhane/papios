@@ -40,6 +40,11 @@ export const envSchema = z.object({
   /** Cloudflare Turnstile (K-3.12) for public pages: demo now, analysis tool later. */
   TURNSTILE_SITE_KEY: optionalSecret,
   TURNSTILE_SECRET_KEY: optionalSecret,
+  /** Space-separated origins allowed to embed /analiz in an iframe (K-12.1), e.g. https://ajnadigitalagency.com */
+  ANALYSIS_EMBED_ORIGINS: z
+    .string()
+    .regex(/^(https:\/\/[\w.-]+(:\d+)?)( https:\/\/[\w.-]+(:\d+)?)*$/)
+    .optional(),
   GITHUB_REPOSITORY: z
     .string()
     .regex(/^[\w.-]+\/[\w.-]+$/)

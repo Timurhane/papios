@@ -21,6 +21,7 @@ import type {
   ContentItemRow,
   DemoRow,
   RoutineRow,
+  ToolRequestRow,
   SalesStats,
   SuggestionRow,
   DemoTouch,
@@ -53,6 +54,8 @@ const STEP_COLUMNS =
   'position, day_offset, anchor, repeat_every_days, channel, angle, conditions, requires_approval, approval_exempt_kind';
 
 type CountQuery = ReturnType<ReturnType<SupabaseClient['from']>['select']>;
+const TOOL_COLUMNS =
+  'id, company_id, email, query, consent_at, consent_version, token_hash, status, report, mailed_at, created_at, expires_at';
 const ROUTINE_COLUMNS =
   'id, code, name, schedule, action, params, enabled, source, next_run_at, last_run_at, last_result';
 const MEETING_COLUMNS =
@@ -2291,5 +2294,68 @@ export class SupabaseRepo implements Repo {
       created_at: r.created_at,
       score: r.similarity,
     }));
+  }
+
+  // --- Phase 7: analysis tool ---
+
+  async createToolRequest(
+    r: Pick<
+      ToolRequestRow,
+      | 'company_id'
+      | 'email'
+      | 'query'
+      | 'consent_at'
+      | 'consent_version'
+      | 'token_hash'
+      | 'expires_at'
+    >,
+  ) {
+    const row = must(
+      await this.db
+        .from('tool_requests')
+        .insert({ ...r, tenant_id: this.tenantId })
+        .select('id')
+        .single(),
+      'create tool request',
+    ) as { id: string };
+    return row.id;
+  }
+
+  async getToolRequest(id: string) {
+    return must(
+      await this.db
+        .from('tool_requests')
+        .select(TOOL_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'tool request',
+    ) as ToolRequestRow | null;
+  }
+
+  async toolRequestByTokenHash(hash: string) {
+    return must(
+      await this.db
+        .from('tool_requests')
+        .select(TOOL_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('token_hash', hash)
+        .maybeSingle(),
+      'tool request by token',
+    ) as ToolRequestRow | null;
+  }
+
+  async updateToolRequest(
+    id: string,
+    patch: Partial<Pick<ToolRequestRow, 'status' | 'report' | 'mailed_at' | 'email'>>,
+  ) {
+    must(
+      await this.db.from('tool_requests').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update tool request',
+    );
+  }
+
+  async toolRequestsSince(since: Date) {
+    return this.countSince('tool_requests', 'created_at', since);
   }
 }

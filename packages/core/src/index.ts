@@ -16,6 +16,7 @@ export * from './analysis/sector.ts';
 export * from './analysis/scoring.ts';
 export * from './analysis/summary.ts';
 export * from './analysis/pipeline.ts';
+export * from './analysis/tool-report.ts';
 export * from './outreach/schedule.ts';
 export * from './outreach/text.ts';
 export * from './outreach/token.ts';
