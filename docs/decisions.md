@@ -215,14 +215,14 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ## Açık kararlar (Timurhan onayı bekliyor)
 
-| # | Konu | Ne zaman gerekli |
-|---|---|---|
-| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8) | Faz 3 öncesi |
-| A-2 | Hata takibi: Sentry (kartsızsa) vs kendi hata tablosu (K-3.13) | Faz 0 içinde, limitler doğrulandıktan sonra |
-| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9) | Faz 1 |
-| A-4 | GitHub reposu özel mi herkese açık mı (Actions dakika kotasını belirler, K-3.17) | Faz 0 |
-| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5) | Faz 7 (ama Faz 0'da bilinmesi iyi) |
-| A-6 | KDV dahil/hariç (K-7.2) | İlk teklifte |
+| #   | Konu                                                                             | Ne zaman gerekli                            |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)                            | Faz 3 öncesi                                |
+| A-2 | Hata takibi: Sentry (kartsızsa) vs kendi hata tablosu (K-3.13)                   | Faz 0 içinde, limitler doğrulandıktan sonra |
+| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)                         | Faz 1                                       |
+| A-4 | GitHub reposu özel mi herkese açık mı (Actions dakika kotasını belirler, K-3.17) | Faz 0                                       |
+| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5)                   | Faz 7 (ama Faz 0'da bilinmesi iyi)          |
+| A-6 | KDV dahil/hariç (K-7.2)                                                          | İlk teklifte                                |
 
 ## Varsayımlar
 

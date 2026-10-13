@@ -1,0 +1,25 @@
+# Gitleaks config: default rules plus project-specific ones.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role-jwt"
+description = "Supabase JWT (service_role or anon key)"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+keywords = ["eyJ"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram bot token"
+regex = '''\b[0-9]{8,10}:AA[0-9A-Za-z_-]{33}\b'''
+keywords = [":AA"]
+
+[[rules]]
+id = "groq-api-key"
+description = "Groq API key"
+regex = '''\bgsk_[A-Za-z0-9]{48,}\b'''
+keywords = ["gsk_"]
+
+[allowlist]
+description = "Example env file holds placeholders only"
+paths = ['''\.env\.example$''']

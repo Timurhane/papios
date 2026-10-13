@@ -34,15 +34,15 @@
 
 ## 2. Uygulamalar ve paketler
 
-| Yol | Sorumluluk | Çalıştığı yer |
-|---|---|---|
-| `apps/api` | Hono REST API, Telegram webhook, cron kuyruk dağıtıcısı, herkese açık uçlar (analiz aracı, çıkış linki, `/demo/{token}`) | Cloudflare Workers |
-| `apps/web` | Panel (18 modül), giriş + TOTP, "Papi ile konuş" | Cloudflare Pages |
-| `apps/jobs` | Ağır işler: Playwright site tarayıcı, toplu analiz, PageSpeed, yedek, veri saklama temizliği | GitHub Actions |
-| `packages/core` | Tipler, Zod şemaları, db istemcisi, LLM katmanı, ajan döngüsü, araçlar, puanlama, playbook motoru, kuyruk, koruma katmanı (reddedenler/onay/audit) | Her yerde (Worker uyumlu, Node API'si kullanmaz) |
-| `packages/prompts` | Ajan ve görev promptları, versiyonlu | Her yerde |
-| `packages/modules` | Müşteriye teslim modül şablonları (README, JSON Schema, rehber, test listesi) | — |
-| `supabase/` | Migration, seed, RLS politikaları, pgTAP testleri | Supabase |
+| Yol                | Sorumluluk                                                                                                                                         | Çalıştığı yer                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `apps/api`         | Hono REST API, Telegram webhook, cron kuyruk dağıtıcısı, herkese açık uçlar (analiz aracı, çıkış linki, `/demo/{token}`)                           | Cloudflare Workers                               |
+| `apps/web`         | Panel (18 modül), giriş + TOTP, "Papi ile konuş"                                                                                                   | Cloudflare Pages                                 |
+| `apps/jobs`        | Ağır işler: Playwright site tarayıcı, toplu analiz, PageSpeed, yedek, veri saklama temizliği                                                       | GitHub Actions                                   |
+| `packages/core`    | Tipler, Zod şemaları, db istemcisi, LLM katmanı, ajan döngüsü, araçlar, puanlama, playbook motoru, kuyruk, koruma katmanı (reddedenler/onay/audit) | Her yerde (Worker uyumlu, Node API'si kullanmaz) |
+| `packages/prompts` | Ajan ve görev promptları, versiyonlu                                                                                                               | Her yerde                                        |
+| `packages/modules` | Müşteriye teslim modül şablonları (README, JSON Schema, rehber, test listesi)                                                                      | —                                                |
+| `supabase/`        | Migration, seed, RLS politikaları, pgTAP testleri                                                                                                  | Supabase                                         |
 
 `packages/core` Workers runtime'ında da çalışacağı için yalnızca Web standart API'leri (fetch, crypto.subtle) kullanır.
 Node'a özel kod `apps/jobs` içinde kalır.
@@ -101,19 +101,20 @@ task(level, dataClass) → router → quota/rate limiter → cache(hash) → pro
 ## 7. Dışarı giden mesaj koruma katmanı
 
 Her giden mesaj tek bir `outbound.guard()` fonksiyonundan geçer:
+
 1. Alıcı/firma `suppression_list`'te mi? → kesin red.
 2. Onay var mı? (analiz aracı raporu istisnası açık tür adıyla)
 3. İş saati / haftalık temas sınırı / günlük limit + ısınma.
 4. Kanal kuralları (soğuk mail ≤ 80 kelime, çıkış linki).
 5. `audit_log` kaydı.
-Bu kontroller testlerle korunur; guard dışında gönderim yapan kod yazılmaz.
+   Bu kontroller testlerle korunur; guard dışında gönderim yapan kod yazılmaz.
 
 ## 8. Ortamlar
 
-| Ortam | Supabase | Worker | Panel |
-|---|---|---|---|
-| Yerel | `supabase start` (Docker) | `wrangler dev` | `vite` |
-| CI | `supabase start` (Actions'ta Docker) | testler | build |
-| Canlı | Supabase ücretsiz proje | Workers | Pages |
+| Ortam | Supabase                             | Worker         | Panel  |
+| ----- | ------------------------------------ | -------------- | ------ |
+| Yerel | `supabase start` (Docker)            | `wrangler dev` | `vite` |
+| CI    | `supabase start` (Actions'ta Docker) | testler        | build  |
+| Canlı | Supabase ücretsiz proje              | Workers        | Pages  |
 
 Not: Ücretsiz Supabase'de ayrı staging projesi açılabilir (proje sayısı limiti doğrulanacak); başlangıçta yalnızca canlı + yerel.
