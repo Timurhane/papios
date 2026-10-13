@@ -123,6 +123,31 @@ export const TEST_PLAYBOOKS: PlaybookWithSteps[] = [
     ],
   },
   {
+    id: 'pb-sicak-gelen',
+    code: 'sicak_gelen',
+    name: 'Sıcak Gelen',
+    steps: [
+      step({
+        position: 1,
+        day_offset: 0,
+        channel: 'email',
+        angle: 'Analiz raporu (anında, onaysız)',
+        conditions: { requires: ['email'] },
+        requires_approval: false,
+        approval_exempt_kind: 'analysis_tool_report',
+      }),
+      step({
+        position: 2,
+        day_offset: 0,
+        channel: 'phone_call',
+        angle: 'Aynı gün arama görevi',
+        conditions: { requires: ['phone'] },
+      }),
+      step({ position: 3, day_offset: 2, channel: 'email', conditions: { requires: ['email'] } }),
+      step({ position: 4, day_offset: 5, channel: 'email', conditions: { requires: ['email'] } }),
+    ],
+  },
+  {
     id: 'pb-simdi-degil',
     code: 'simdi_degil',
     name: 'Şimdi Değil',
