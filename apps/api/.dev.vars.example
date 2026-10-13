@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev` (git-ignored).
+APP_ENV=development
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_ROLE_KEY=

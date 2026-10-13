@@ -1,0 +1,18 @@
+# Local git hooks. CI runs the same checks, so skipping hooks never skips enforcement.
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks git --staged --redact --no-banner --config .gitleaks.toml
+        else
+          echo "gitleaks not installed: see docs/setup/dev-environment.md" >&2
+          exit 1
+        fi
+    prettier:
+      glob: '*.{ts,tsx,js,json,md,yml,yaml,css,html}'
+      run: pnpm exec prettier --check {staged_files}
+    eslint:
+      glob: '*.{ts,tsx,js}'
+      run: pnpm exec eslint {staged_files}

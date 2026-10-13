@@ -1,0 +1,10 @@
+# Secrets are never written here. Set them with `wrangler secret put <NAME>` (see docs/setup/).
+name = "papi-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_ENV = "production"
+
+# Cron triggers are added in Phase 1 (queue dispatcher).
