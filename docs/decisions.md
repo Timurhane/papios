@@ -227,12 +227,12 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ## Açık kararlar (Timurhan onayı bekliyor)
 
-| #   | Konu                                                           | Ne zaman gerekli                   |
-| --- | -------------------------------------------------------------- | ---------------------------------- |
-| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)          | Faz 3 öncesi                       |
-| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)       | Faz 1                              |
-| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5) | Faz 7 (ama Faz 0'da bilinmesi iyi) |
-| A-6 | KDV dahil/hariç (K-7.2)                                        | İlk teklifte                       |
+| #   | Konu                                                           | Ne zaman gerekli                              |
+| --- | -------------------------------------------------------------- | --------------------------------------------- |
+| A-1 | Mail altyapısı: Natro SMTP/IMAP vs Gmail API (K-10.8)          | Masaüstü kurulum oturumu (Faz 3 canlı kabulü) |
+| A-3 | TTS sağlayıcı: ElevenLabs ücretsiz vs Gemini TTS (K-3.9)       | Faz 1                                         |
+| A-5 | Yedeklerin hedefi: ayrı özel repo vs Actions artifact (K-17.5) | Faz 7 (ama Faz 0'da bilinmesi iyi)            |
+| A-6 | KDV dahil/hariç (K-7.2)                                        | İlk teklifte                                  |
 
 ## Varsayımlar
 
@@ -285,3 +285,14 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **V-45** Worker'da dakika başına tek ulaşma adımı çalışır (taslak / gönderim / gelen kutusu / tek tık sırayla), ücretsiz plandaki istek ve CPU sınırları için. Saatte en fazla 15 mail gönderim denemesi olur; ısınma limitleri bunun çok altındadır.
 - **V-46** Panelden onay yalnızca onay satırını değiştirir (`app.panel_decide_approval`); zamanlama ve stil hafızası Worker'da yapılır (en geç 4 dakika gecikme). Elle düzenlenen metin kişi adını içerdiği için stil hafızasına metin olarak değil "elle düzenlendi" notu olarak yazılır.
 - **V-47** Panelde "yeniden yaz" (talimatla düzeltme) şimdilik yalnızca Telegram'da; panelde düzenle / onayla / reddet var.
+- **V-48** Satış varsayılanları (ayarlardan değişir): görüşme 30 dk; 3 öneri, en erken 4 saat sonra, 10 gün içinde, günde en çok bir öneri, tercih saatleri 10:00 / 14:00 / 11:30 / 16:00; teklif geçerliliği 14 gün; demo için demo başına günde 30, toplamda günde 200 ziyaretçi mesajı.
+- **V-49** Panelin sunucu gerektiren işlemleri (taslak teklif, görüşme saati, görüşme notu, hazırlık notu, demo, teklif gönderildi/kabul/ret) Worker'daki `/panel/:işlem` ucundan yapılır. Kullanıcının kendi Supabase oturumu Supabase Auth ile doğrulanır; TOTP (aal2) ve kiracı üyeliği zorunludur. Yalnızca panel adresinden (CORS) çağrılabilir, her işlem audit'e yazılır.
+- **V-50** Demo linki tahmin edilemez 32 baytlık bir anahtardır. Anahtar veritabanında RLS arkasında tutulur ki panelden yeniden paylaşılabilsin. Ziyaretler sayfa açılışında sayılır; WhatsApp'ın link önizlemesi de bir ziyaret sayılabilir. Ziyaretçinin yazdıkları ayıklanarak modele gider ve saklanmaz, yalnızca sayılır. Canlıda Turnstile zorunludur; IP başına 10 dakikada 20 mesaj sınırı vardır (IP özetlenir, ham hâli saklanmaz).
+- **V-51** Kurucu müşteri indirimi, kontenjan gerçekten açıkken yeni tekliflere varsayılan olarak konur; Timurhan taslakta kaldırabilir. Kontenjan teklif **kabul edildiğinde** düşer ve sayaç veritabanında aşılamaz.
+- **V-52** Takvim etkinlikleri yalnızca Timurhan'ın takvimine katılımcısız eklenir, dışarıya davet gitmez; bu yüzden onay kuyruğuna girmez. Saatleri firmaya iletmek, onaylı bir mesajla olur.
+- **V-53** ⚠️ Sesli görüşme notu yazıya çevrilirken (Groq Whisper, ücretsiz katman) ayıklanamaz. Bu yüzden Papi, sesli notta kişi adı ve telefon söylenmemesini hatırlatır. Yazılı notlar ve sesli notun yazıya çevrilmiş hâli, modele gitmeden ayıklanır (K-4.9).
+- **V-54** Mail bağlanana kadar (A-1) teklif şöyle gönderilir: PDF panelde oluşur, WhatsApp tek tıkla ya da elle gönderilir, ardından "Gönderildi" işaretlenir. Teklif Takibi dizisi "gönderildi" anında başlar.
+- **V-55** Kabul edilen teklifin firması "Kazanıldı" olur ve sıradaki adımı "kurulum formu ve proje" (Faz 5) olarak 1 gün sonraya bekler. Reddedilen teklifin firması "Kaybedildi" olur ve 90 gün sonra yeniden değerlendirilir.
+- **V-56** Görüşme notu, firmanın önerilmiş ya da planlanmış görüşmesi varsa ona yazılır; yoksa yeni bir "yapıldı" görüşmesi açılır. Model bir paket önerirse teklif taslağı kendiliğinden çıkar, KDV sorusu sorulur, ardından onaya gider.
+- **V-57** Soğuk Ana'nın demo adımı (G7) artık gerçek bir 14 günlük demo oluşturur. Link e-postayla gider, e-posta yoksa WhatsApp tek tıkla; her iki durumda da Ulak taslağı yazar ve Timurhan onaylar. Bu V-44'ün demo kısmının yerini alır.
+- **V-58** Teklif PDF yazı tipi Noto Sans'tır (OFL), Latin ve Türkçe karakterlere göre önceden küçültülmüştür (~29 KB). PDF yaklaşık 40 KB tutar; pdf-lib'in kendi küçültmesi glif kaybettiği için kullanılmaz.

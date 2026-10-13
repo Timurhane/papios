@@ -57,9 +57,10 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 4 — Satış
 
-- [ ] Satıcı: cevap taslakları, Google Takvim görüşme önerisi, görüşme asistanı
-- [ ] Teklif stüdyosu + PDF, kurucu indirimi sayacı
-- [ ] Kişiye özel demo sayfaları
+- [x] Satıcı: cevap taslakları (ayıklanmış girdiyle), görüşme saati önerisi (Google Takvim bağlanınca dolu saatleri atlar), hazırlık notu, görüşme notundan teklif taslağı
+- [x] Teklif stüdyosu + PDF (tarayıcıda), iki ödeme yolu, kurucu indirimi sayacı (veritabanında aşılamaz), Özel proje fiyatlama
+- [x] Kişiye özel demo sayfaları (14 gün, Turnstile, günlük sınırlar), Soğuk Ana demo adımı
+- [ ] Canlı: Google Takvim + Turnstile + Worker adresi kurulumu (masaüstü oturumu)
 - [ ] **Kabul:** Sesli görüşme notundan teklif taslağı ve PDF · demo linki çalışıyor ve 14 gün sonra kapanıyor
 
 ## Faz 5 — Operasyon

@@ -225,3 +225,30 @@ Tek tık: Telegram "Gönderdim/Atla" veya panel → app.panel_complete_touch
 - **Mail taşıyıcı** `MailTransport` arayüzünün arkasındadır; A-1 kararına kadar `DisabledMailTransport` (hiçbir şey
   gönderilmez/okunmaz, taslak ve onay akışı çalışır).
 - **Adım performansı** `public.playbook_step_stats` görünümünden (security_invoker; RLS geçerli).
+
+## 16. Faz 4: Satış
+
+```
+Telegram /gorusme {firma} → yazı/sesli not ─┐
+Panel firma kartı → "Notu kaydet"          ─┴► redactPersonal (K-4.9) → Satıcı: yapılandırılmış not
+                                               → meetings (ham not yalnızca bizim DB'de)
+                                               → paket önerildiyse draftProposal: quotePaths (kod) + giriş/kapsam (model)
+                                               → KDV sorusu (Telegram butonu / panel) → onay kuyruğu
+Onay (Telegram ya da panel → Worker reconcile) → proposals.approved
+Panel: PDF (pdf-lib + Noto Sans, tarayıcıda) → Storage `proposals/{tenant}/{id}.pdf` → imzalı link
+     → WhatsApp tek tık / elle → "Gönderildi" → Teklif Takibi
+     → "Kabul edildi" → app.accept_proposal (kurucu kontenjanı atomik) → Kazanıldı
+
+Gelen "ilgileniyor/soru" cevabı → iş: satici.reply_draft → ayıklanmış metin → taslak (+ {saatler} → meetingSlots)
+     → e-posta touch (aynı thread) → onay → iş saatinde gönderim (mail bağlanınca)
+
+Demo: /demo {firma} | panel | Soğuk Ana G7 → demos (32 bayt anahtar, 14 gün)
+     GET /demo/:t → app.demo_touch(visit) · POST /demo/:t/chat → Turnstile → IP sınırı → app.demo_touch(message)
+     → ayıklanmış mesaj + yalnızca demonun anlık görüntüsü → model
+Panel → Worker: POST /panel/:işlem (Supabase Auth ile doğrulanan aal2 oturum + üyelik, CORS: panel adresi)
+```
+
+- Takvim `CalendarProvider` arkasında (`GoogleCalendar` / `DisabledCalendar`); OAuth yenileme anahtarı Worker
+  secret'ında.
+- Teklif numarası `AJNA-YYYY-NNNN`, kiracı ve yıl başına sayaçla, veritabanında verilir.
+- KDV cevabı olmadan teklif onaya gidemez (veritabanı kısıtı).

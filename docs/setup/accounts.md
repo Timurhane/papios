@@ -150,6 +150,50 @@ Ağır işler (Playwright derin tarama, CSV/OSM/web araması) normalde 6 saatte 
    yalnızca `Timurhane/papios`; Permissions → **Actions: Read and write**. Süre: 90 gün.
 2. GitHub secret: `GITHUB_DISPATCH_TOKEN` (repo adı deploy sırasında otomatik eklenir).
 
-## 11–12. İleriki fazlar
+## 11. Worker'ın genel adresi ve imza anahtarı (Faz 3–4)
+
+Çıkış linkleri, demo sayfaları ve panelin sunucu işlemleri için.
+
+1. API deploy bittikten sonra Cloudflare → **Workers & Pages → papi-api** sayfasındaki adresi kopyala
+   (`https://papi-api.<alt-alan>.workers.dev`).
+2. GitHub → Settings → Secrets and variables → Actions → **Variables** → `PUBLIC_API_URL` = bu adres.
+3. Cloudflare Pages (panel) → Settings → Environment variables → `VITE_API_URL` = aynı adres (Production + Preview),
+   sonra paneli yeniden yayınla.
+4. Şifre yöneticinle en az 64 karakterlik rastgele bir değer üret → GitHub **secret** `PUBLIC_TOKEN_SECRET`.
+5. Bana haber ver; API deploy'u yeniden çalıştırırım.
+
+## 12. Cloudflare Turnstile (demo sayfalarının bot koruması)
+
+Ücretsiz, kart istemez (ücretsiz planda 20 widget, sınırsız doğrulama).
+
+1. Cloudflare → **Turnstile → Add widget**. Ad: `Papi demo`. Hostname: 11. adımdaki Worker adresinin alan adı
+   (`papi-api.<alt-alan>.workers.dev`). Widget mode: **Managed**.
+2. **Site Key** → GitHub secret `TURNSTILE_SITE_KEY`; **Secret Key** → GitHub secret `TURNSTILE_SECRET_KEY`.
+3. Bana haber ver. Bu adım yapılmadan demo sayfası açılır ama canlıda mesaj gönderilemez (koruma zorunlu).
+
+## 13. Google Takvim (önerilir)
+
+Görüşme saati önerirken dolu saatlerini atlar ve seçilen görüşmeyi takvimine ekler. Bağlanmazsa yalnızca iş
+saatine göre önerir. Kimseye davet gönderilmez.
+
+1. https://console.cloud.google.com → 10. adımdaki `papi` projesi (faturalandırma **açma**).
+2. **APIs & Services → Library → Google Calendar API → Enable**.
+3. **OAuth consent screen**: User type **External**; uygulama adı `Papi`; destek ve geliştirici e-postası: senin
+   e-postan. Scopes ekleme adımını geç. **Test users** → kendi Google hesabın.
+4. **Publish app → In production**. (Test modunda kalırsa bağlantı 7 günde bir kopar.) "Doğrulanmamış uygulama"
+   uyarısı kendi kullanımın için sorun değil.
+5. **Credentials → Create credentials → OAuth client ID** → Application type: **Web application** →
+   Authorized redirect URI: `https://developers.google.com/oauthplayground` → Create. Client ID ve Client secret
+   ekranda kalsın.
+6. https://developers.google.com/oauthplayground → sağ üstte dişli → **Use your own OAuth credentials** → Client ID
+   ve secret'ı gir. Sol kutuya şu iki kapsamı yaz ve **Authorize APIs**:
+   `https://www.googleapis.com/auth/calendar.events` ve `https://www.googleapis.com/auth/calendar.freebusy`.
+   Google hesabınla izin ver ("Gelişmiş → Papi'ye git" diyebilir).
+7. **Exchange authorization code for tokens** → çıkan **Refresh token**'ı kopyala.
+8. GitHub secrets: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`. Bana haber ver.
+
+A-1'de Gmail seçeneği seçilirse aynı OAuth uygulamasına Gmail kapsamı eklenir; ayrı bir uygulama gerekmez.
+
+## 14. İleriki fazlar
 
 Bu adımlar ilgili faz başlarken tek tek, aynı ayrıntıda verilecek.
