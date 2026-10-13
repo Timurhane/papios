@@ -15,6 +15,7 @@ import {
   handleUnsubscribe,
   onApprovalDecided,
   processInbound,
+  reconcilePanelDecisions,
   sendNextEmail,
   type OutreachDeps,
 } from './ulak.ts';
@@ -375,5 +376,48 @@ describe('sequence mechanics', () => {
   it('greetings never infer gender', () => {
     expect(greetingFor('Uzm. Dr. Ayşe Yılmaz')).toBe('Merhaba Uzm. Dr. Ayşe Yılmaz,');
     expect(greetingFor(null)).toBe('Merhaba,');
+  });
+});
+
+describe('panel decisions', () => {
+  it('an approval edited and approved in the panel is applied and scheduled by the Worker', async () => {
+    const { repo, deps } = setup();
+    await analyzedCompany(repo);
+    await autoEnroll(deps);
+    await advanceEnrollments(deps, null);
+    const approval = repo.approvals[0]!;
+    Object.assign(approval, {
+      status: 'approved',
+      decided_via: 'panel',
+      payload: {
+        ...approval.payload,
+        edited: { text: 'Merhaba,\n\nKısa bir not.\n\nTimurhan', subject: 'Yeni konu' },
+      },
+    });
+
+    expect(await reconcilePanelDecisions(deps)).toBe(1);
+    const touch = await repo.touchByApproval(approval.id);
+    expect(touch).toMatchObject({
+      status: 'scheduled',
+      body: 'Merhaba,\n\nKısa bir not.\n\nTimurhan',
+      subject: 'Yeni konu',
+    });
+    expect(repo.styleMemory).toContainEqual(
+      expect.objectContaining({ verdict: 'edited', revised: null }),
+    );
+    // Already handled: a second pass does nothing.
+    expect(await reconcilePanelDecisions(deps)).toBe(0);
+  });
+
+  it('a panel rejection cancels the touch; pending approvals are left alone', async () => {
+    const { repo, deps } = setup();
+    await analyzedCompany(repo);
+    await autoEnroll(deps);
+    await advanceEnrollments(deps, null);
+    const approval = repo.approvals[0]!;
+    expect(await reconcilePanelDecisions(deps)).toBe(0);
+    Object.assign(approval, { status: 'rejected', decided_via: 'panel' });
+    expect(await reconcilePanelDecisions(deps)).toBe(1);
+    expect((await repo.touchByApproval(approval.id))?.status).toBe('cancelled');
   });
 });

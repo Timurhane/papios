@@ -62,8 +62,83 @@ export interface CompanyDetail extends CompanySummary {
   events: { id: number; occurred_at: string; kind: string; summary: string }[];
 }
 
+export type Channel =
+  'email' | 'whatsapp' | 'instagram_dm' | 'linkedin' | 'x' | 'phone_call' | 'visit' | 'demo';
+
+export type ReplyClass =
+  'interested' | 'question' | 'later' | 'no' | 'do_not_contact' | 'auto_reply' | 'unknown';
+
+export interface ApprovalItem {
+  id: string;
+  kind: string;
+  title: string;
+  created_at: string;
+  text: string | null;
+  subject: string | null;
+  channel: Channel | null;
+  warnings: string[];
+  /** Word limit when this is the first cold email of a sequence (K-10.15), else null. */
+  maxWords: number | null;
+}
+
+export interface ApprovalEdit {
+  text: string;
+  subject?: string | null;
+}
+
+/** A touch Timurhan completes by hand: one-click message, call or visit (K-10.16). */
+export interface OneClickItem {
+  id: string;
+  company_id: string;
+  company_name: string;
+  channel: Channel;
+  recipient: string | null;
+  body: string | null;
+  due_at: string | null;
+}
+
+export interface InboxItem {
+  id: string;
+  company_id: string | null;
+  company_name: string | null;
+  channel: Channel;
+  from_address: string | null;
+  subject: string | null;
+  body: string | null;
+  received_at: string;
+  classification: ReplyClass | null;
+  handled: boolean;
+}
+
+export interface PlaybookStepStat {
+  position: number;
+  day_offset: number;
+  channel: Channel;
+  angle: string;
+  sent: number;
+  skipped: number;
+  pending: number;
+  replies: number;
+  positive: number;
+}
+
+export interface PlaybookOverview {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  trigger: string;
+  duration_days: number | null;
+  active: boolean;
+  activeEnrollments: number;
+  steps: PlaybookStepStat[];
+}
+
 export interface TodaySummary {
-  pendingApprovals: { id: string; title: string }[];
+  pendingApprovals: ApprovalItem[];
+  oneClick: OneClickItem[];
+  calls: OneClickItem[];
+  hotReplies: InboxItem[];
   recentlyAnalyzed: CompanySummary[];
   dueWaiting: CompanySummary[];
   quota: { bucket: string; used: number }[];
@@ -81,4 +156,18 @@ export interface PanelApi {
   setNextStep(id: string, step: NextStepUpdate): Promise<void>;
   queueCsvImport(rows: Record<string, string>[]): Promise<void>;
   today(): Promise<TodaySummary>;
+  /** Panel approval; the Worker then schedules the touch (or cancels it). False if no longer pending. */
+  decideApproval(
+    id: string,
+    decision: 'approved' | 'rejected',
+    edit?: ApprovalEdit,
+  ): Promise<boolean>;
+  /** "Gönderdim / Aradım" or "Atla" for a ready one-click item. False if it was not ready. */
+  completeTouch(id: string, action: 'sent' | 'skip'): Promise<boolean>;
+  listInbox(filter: {
+    classification?: ReplyClass | 'all';
+    openOnly?: boolean;
+  }): Promise<InboxItem[]>;
+  setInboxHandled(id: string, handled: boolean): Promise<void>;
+  listPlaybooks(): Promise<PlaybookOverview[]>;
 }

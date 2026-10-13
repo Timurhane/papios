@@ -4,11 +4,13 @@ import { Shell } from '@/layout/Shell';
 import { CompanyPage } from '@/crm/CompanyPage';
 import { CrmPage } from '@/crm/CrmPage';
 import { panelModules } from '@/modules';
+import { InboxPage } from '@/outreach/InboxPage';
+import { PlaybooksPage } from '@/outreach/PlaybooksPage';
 import { TodayPage } from '@/today/TodayPage';
 import { ModulePlaceholder } from '@/pages/ModulePlaceholder';
 import { NotFound } from '@/pages/NotFound';
 
-const IMPLEMENTED = new Set(['/', '/crm']);
+const IMPLEMENTED = new Set(['/', '/crm', '/gelen-kutusu', '/playbooklar']);
 
 export function App() {
   return (
@@ -18,6 +20,8 @@ export function App() {
           <Route path="/" element={<TodayPage />} />
           <Route path="/crm" element={<CrmPage />} />
           <Route path="/crm/:id" element={<CompanyPage />} />
+          <Route path="/gelen-kutusu" element={<InboxPage />} />
+          <Route path="/playbooklar" element={<PlaybooksPage />} />
           {panelModules
             .filter((m) => !IMPLEMENTED.has(m.path))
             .map((m) => (

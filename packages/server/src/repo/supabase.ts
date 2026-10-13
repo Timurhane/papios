@@ -239,7 +239,7 @@ export class SupabaseRepo implements Repo {
     return must(
       await this.db
         .from('approvals')
-        .select('id, kind, title, payload, status, batch_id, created_at')
+        .select('id, kind, title, payload, status, batch_id, created_at, decided_via')
         .eq('tenant_id', this.tenantId)
         .eq('status', 'pending')
         .order('created_at')
@@ -252,7 +252,7 @@ export class SupabaseRepo implements Repo {
     return must(
       await this.db
         .from('approvals')
-        .select('id, kind, title, payload, status, batch_id, created_at')
+        .select('id, kind, title, payload, status, batch_id, created_at, decided_via')
         .eq('tenant_id', this.tenantId)
         .eq('id', id)
         .maybeSingle(),

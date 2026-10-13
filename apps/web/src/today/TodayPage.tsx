@@ -6,11 +6,14 @@ import { ScoreBadge } from '@/crm/ScoreBadge';
 import { usePanelApi } from '@/data/PanelApiContext';
 import type { CompanySummary } from '@/data/types';
 import { useAsync } from '@/data/useAsync';
+import { ApprovalCard } from '@/outreach/ApprovalCard';
+import { formatDateTime, REPLY_LABEL } from '@/outreach/labels';
+import { OneClickList } from '@/outreach/OneClickList';
 
-/** Bugün (K-13.2), first version: approvals, fresh analyses, due waiting items, quota. */
+/** Bugün (K-13.2): approvals, one-click queue, calls, hot replies, analyses, waiting items, quota. */
 export function TodayPage() {
   const api = usePanelApi();
-  const { data, error, loading } = useAsync(() => api.today(), 'today');
+  const { data, error, loading, reload } = useAsync(() => api.today(), 'today');
 
   return (
     <section className="flex flex-col gap-5">
@@ -30,15 +33,49 @@ export function TodayPage() {
             {data.pendingApprovals.length === 0 ? (
               <p className="text-sm text-muted">Onay bekleyen iş yok ✅</p>
             ) : (
-              <ul className="space-y-1 text-sm">
+              <ul className="space-y-2">
                 {data.pendingApprovals.map((a) => (
-                  <li key={a.id}>{a.title}</li>
+                  <ApprovalCard key={a.id} item={a} onDone={reload} />
                 ))}
               </ul>
             )}
-            <p className="mt-3 text-xs text-muted">
-              Onaylar şimdilik Telegram'dan (/onaylar); panelden onay Faz 3'te.
-            </p>
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">Sıcak cevaplar ({data.hotReplies.length})</h2>
+            {data.hotReplies.length === 0 ? (
+              <p className="text-sm text-muted">Bekleyen sıcak cevap yok.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {data.hotReplies.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <span className="rounded-full bg-violet/20 px-2 py-0.5 text-xs text-violet">
+                      {m.classification ? REPLY_LABEL[m.classification] : 'Cevap'}
+                    </span>
+                    <Link to="/gelen-kutusu" className="min-w-0 flex-1 truncate hover:underline">
+                      {m.company_name || m.from_address}
+                    </Link>
+                    <span className="text-xs text-muted">{formatDateTime(m.received_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">Tek tık kuyruğu ({data.oneClick.length})</h2>
+            <OneClickList
+              items={data.oneClick}
+              empty="Gönderilecek tek tık mesaj yok."
+              onDone={reload}
+            />
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold">
+              Bugünün aramaları ve ziyaretleri ({data.calls.length})
+            </h2>
+            <OneClickList items={data.calls} empty="Bugün arama/ziyaret yok." onDone={reload} />
           </Card>
 
           <Card>
@@ -71,9 +108,6 @@ export function TodayPage() {
           </Card>
         </div>
       )}
-      <p className="text-xs text-muted">
-        Aramalar, ziyaretler, sıcak cevaplar ve tek tık kuyruğu Faz 3'te bu ekrana eklenecek.
-      </p>
     </section>
   );
 }

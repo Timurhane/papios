@@ -88,7 +88,7 @@ describe('outreach through the Worker', () => {
 
     outreach.now = () => AT(1);
     expect(await runOutreachStep({ repo, tg, ownerChatId: OWNER, outreach }, AT(1))).toBe(
-      'send:sent',
+      'panel:0 send:sent',
     );
     expect(mail.sent).toHaveLength(1);
   });

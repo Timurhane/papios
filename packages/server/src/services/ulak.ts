@@ -434,6 +434,59 @@ export async function onApprovalDecided(
   }
 }
 
+/**
+ * Approvals decided in the panel (RLS-scoped user session) only change the approval row; the Worker
+ * picks them up here: applies a hand edit to the touch, records style memory and schedules or cancels.
+ * Telegram decisions are handled inline and never reach this path (their touch has already moved on).
+ */
+export async function reconcilePanelDecisions(deps: OutreachDeps, limit = 5): Promise<number> {
+  const waiting = await deps.repo.touchesByStatus(['awaiting_approval'], 50);
+  let done = 0;
+  for (const touch of waiting) {
+    if (done >= limit) break;
+    if (!touch.approval_id) continue;
+    const approval = await deps.repo.getApproval(touch.approval_id);
+    if (!approval || (approval.status !== 'approved' && approval.status !== 'rejected')) continue;
+    const decision = approval.status;
+    const edited = editedDraft(approval.payload);
+    if (decision === 'approved' && edited) {
+      await deps.repo.updateTouch(touch.id, {
+        body: edited.text,
+        ...(edited.subject !== undefined ? { subject: edited.subject } : {}),
+      });
+    }
+    if (approval.decided_via === 'panel') {
+      await deps.repo.addStyleMemory({
+        draftKind:
+          typeof approval.payload.draftKind === 'string'
+            ? approval.payload.draftKind
+            : approval.kind,
+        original: typeof approval.payload.personal === 'string' ? approval.payload.personal : '',
+        // The edited text carries the greeting with the person's name; it never goes to a prompt (K-4.7).
+        revised: null,
+        instruction: edited && decision === 'approved' ? 'Panelde elle düzenlendi' : null,
+        verdict: decision === 'rejected' ? 'rejected' : edited ? 'edited' : 'approved',
+      });
+    }
+    await onApprovalDecided(deps, approval.id, decision);
+    done++;
+  }
+  return done;
+}
+
+function editedDraft(
+  payload: Record<string, unknown>,
+): { text: string; subject?: string | null } | null {
+  const e = payload.edited;
+  if (!e || typeof e !== 'object') return null;
+  const { text, subject } = e as { text?: unknown; subject?: unknown };
+  if (typeof text !== 'string' || !text.trim()) return null;
+  return {
+    text: text.trim(),
+    ...(typeof subject === 'string' ? { subject: subject.trim() || null } : {}),
+  };
+}
+
 // --- sending -------------------------------------------------------------------------------------
 
 export async function unsubscribeUrl(

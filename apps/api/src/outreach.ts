@@ -12,6 +12,7 @@ import {
   autoEnroll,
   CHANNEL_LABEL,
   processInbound,
+  reconcilePanelDecisions,
   sendNextEmail,
   type OutreachDeps,
   type Repo,
@@ -43,8 +44,10 @@ export async function runOutreachStep(d: OutreachTickDeps, now: Date): Promise<s
       if (r.drafts > 0) await announceApprovals(d, before);
       return `advance:${r.drafts}/${r.tasks}/${r.skipped}/${r.completed}`;
     }
-    case 1:
-      return `send:${await sendNextEmail(d.outreach)}`;
+    case 1: {
+      const decided = await reconcilePanelDecisions(d.outreach);
+      return `panel:${decided} send:${await sendNextEmail(d.outreach)}`;
+    }
     case 2: {
       if (!d.outreach.mail.configured) return 'inbox:not_configured';
       const cursor = await d.repo.getState<string>('mail_cursor');

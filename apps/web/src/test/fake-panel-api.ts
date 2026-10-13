@@ -1,4 +1,15 @@
-import type { CompanyDetail, CompanySummary, NextStepUpdate, PanelApi } from '@/data/types';
+import type {
+  ApprovalEdit,
+  ApprovalItem,
+  CompanyDetail,
+  CompanySummary,
+  InboxItem,
+  NextStepUpdate,
+  OneClickItem,
+  PanelApi,
+  PlaybookOverview,
+  ReplyClass,
+} from '@/data/types';
 
 export const company = (over: Partial<CompanyDetail> = {}): CompanyDetail => ({
   id: 'c1',
@@ -73,6 +84,103 @@ export class FakePanelApi implements PanelApi {
       sector: 'Emlak',
     }),
   ];
+  approvals: ApprovalItem[] = [
+    {
+      id: 'a1',
+      kind: 'outreach',
+      title: 'E-posta: Örnek Diş Kliniği (Soğuk Ana 1. adım)',
+      created_at: '2026-10-13T08:02:00Z',
+      text: 'Merhaba Ayşe Hanım,\n\nMobil siteniz yavaş açılıyor.\n\nTimurhan',
+      subject: 'Mobil siteniz hakkında',
+      channel: 'email',
+      warnings: [],
+      maxWords: 80,
+    },
+  ];
+  decisions: { id: string; decision: string; edit?: ApprovalEdit }[] = [];
+  ready: OneClickItem[] = [
+    {
+      id: 't1',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      channel: 'whatsapp',
+      recipient: '905321112233',
+      body: 'Merhaba, mail attım; bakabildiniz mi?',
+      due_at: '2026-10-13T07:00:00Z',
+    },
+    {
+      id: 't2',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      channel: 'phone_call',
+      recipient: '902661234567',
+      body: 'Kısa tanışma araması',
+      due_at: '2026-10-13T07:00:00Z',
+    },
+  ];
+  completions: { id: string; action: string }[] = [];
+  inbox: InboxItem[] = [
+    {
+      id: 'm1',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      channel: 'email',
+      from_address: 'ayse@ornekdis.com',
+      subject: 'Re: Mobil siteniz hakkında',
+      body: 'Merhaba, ilgimi çekti. Fiyat nedir?',
+      received_at: '2026-10-13T09:00:00Z',
+      classification: 'question',
+      handled: false,
+    },
+    {
+      id: 'm2',
+      company_id: 'c2',
+      company_name: 'Yılmaz Emlak',
+      channel: 'email',
+      from_address: 'info@yilmazemlak.com',
+      subject: 'Ofis dışında',
+      body: 'Ofis dışındayım.',
+      received_at: '2026-10-12T09:00:00Z',
+      classification: 'auto_reply',
+      handled: false,
+    },
+  ];
+  playbooks: PlaybookOverview[] = [
+    {
+      id: 'pb1',
+      code: 'soguk_ana',
+      name: 'Soğuk Ana',
+      description: '70+ puanlı adaylar için 8 adımlı dizi.',
+      trigger: 'Puan 70 ve üzeri',
+      duration_days: 30,
+      active: true,
+      activeEnrollments: 3,
+      steps: [
+        {
+          position: 1,
+          day_offset: 0,
+          channel: 'email',
+          angle: 'En güçlü bulgu',
+          sent: 10,
+          skipped: 0,
+          pending: 2,
+          replies: 2,
+          positive: 1,
+        },
+        {
+          position: 2,
+          day_offset: 2,
+          channel: 'whatsapp',
+          angle: 'Kısa hatırlatma',
+          sent: 0,
+          skipped: 0,
+          pending: 0,
+          replies: 0,
+          positive: 0,
+        },
+      ],
+    },
+  ];
   imports: Record<string, string>[][] = [];
   steps: { id: string; step: NextStepUpdate }[] = [];
 
@@ -110,10 +218,49 @@ export class FakePanelApi implements PanelApi {
   }
   async today() {
     return {
-      pendingApprovals: [{ id: 'a1', title: 'Mail: Örnek Klinik' }],
+      pendingApprovals: this.approvals,
+      oneClick: this.ready.filter((t) => t.channel !== 'phone_call' && t.channel !== 'visit'),
+      calls: this.ready.filter((t) => t.channel === 'phone_call' || t.channel === 'visit'),
+      hotReplies: this.inbox.filter(
+        (m) => !m.handled && (m.classification === 'interested' || m.classification === 'question'),
+      ),
       recentlyAnalyzed: this.companies.slice(0, 1),
       dueWaiting: [],
       quota: [{ bucket: 'gemini', used: 12 }],
     };
+  }
+  async decideApproval(id: string, decision: 'approved' | 'rejected', edit?: ApprovalEdit) {
+    const before = this.approvals.length;
+    this.approvals = this.approvals.filter((a) => a.id !== id);
+    if (this.approvals.length === before) return false;
+    this.decisions.push({ id, decision, ...(edit ? { edit } : {}) });
+    return true;
+  }
+  async completeTouch(id: string, action: 'sent' | 'skip') {
+    const before = this.ready.length;
+    this.ready = this.ready.filter((t) => t.id !== id);
+    if (this.ready.length === before) return false;
+    this.completions.push({ id, action });
+    return true;
+  }
+  async listInbox({
+    classification,
+    openOnly,
+  }: {
+    classification?: ReplyClass | 'all';
+    openOnly?: boolean;
+  }) {
+    return this.inbox.filter(
+      (m) =>
+        (!classification || classification === 'all' || m.classification === classification) &&
+        (!openOnly || !m.handled),
+    );
+  }
+  async setInboxHandled(id: string, handled: boolean) {
+    const m = this.inbox.find((x) => x.id === id);
+    if (m) m.handled = handled;
+  }
+  async listPlaybooks() {
+    return this.playbooks;
   }
 }

@@ -13,7 +13,7 @@ Kabul: Bir aday Soğuk Ana'ya giriyor · onaylanan mail iş saatinde gidiyor · 
    sınırı, ısınma + günlük limit, rastgele aralık, soğuk mail ≤ 80 kelime, çıkış linki, imzalı çıkış token'ı, cevap
    sınıflandırma kuralları (yazmayın / otomatik yanıt / sonra / hayır / ilgileniyor / soru).
 3. **Merkezi gönderim koruması (`outbound guard`):** reddedenler + onay + iş saati + haftalık sınır + kanal kuralları
-   - audit. Gönderen her yol bundan geçer; geçmezse gönderilemez.
+   ve audit. Gönderen her yol bundan geçer; geçmezse gönderilemez.
 4. **Ulak:** adım için taslak (şablon + kişisel kısım, ton profili, yasaklı ifadeler, stil hafızası) → onay kuyruğu.
 5. **Mail:** `MailTransport` arayüzü; onaylı mailleri iş saatinde, günlük limit ve ısınmayla gönderen iş; gelen
    kutusunu yoklayan iş (A-1 kararından sonra gerçek uygulama).

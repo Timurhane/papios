@@ -16,6 +16,7 @@ export interface ApprovalRow {
   status: string;
   batch_id: string | null;
   created_at: string;
+  decided_via?: string | null;
 }
 
 export type EmbeddingTable = 'knowledge_items' | 'memory_items' | 'style_memory';

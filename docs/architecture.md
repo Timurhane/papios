@@ -201,3 +201,27 @@ CSV (panel) / OSM / web araması ──► ağır işler (GitHub Actions, 6 saat
 - Ortak sunucu kodu `packages/server`: `Repo` (Supabase + bellek içi), Analist ve Kaşif servisleri, Instagram ve
   (kapalı) Places adaptörleri, Telegram istemcisi. Hem Worker (`apps/api`) hem Actions işçisi (`apps/jobs`) kullanır.
 - Panel veriye kullanıcının kendi oturumuyla erişir (`PanelApi`): RLS (kiracı + TOTP) her sorguda geçerlidir.
+
+## 15. Faz 3: Ulaşma
+
+```
+cron (her dk; o dakika iş kuyruğunda iş yoksa, dakika % 4):
+  0 → autoEnroll (playbook atanmış firmalar) + advanceEnrollments → Ulak taslağı → onay kuyruğu → Telegram grubu
+  1 → reconcilePanelDecisions (panelden verilen kararlar) + sendNextEmail (iş saati, ısınma, rastgele aralık,
+      outbound guard, çıkış linki + List-Unsubscribe)
+  2 → gelen kutusu (MailTransport.fetchNew) → kural tabanlı sınıflandırma → dizi durur / reddedenler / sıcak bildirim
+  3 → tek tık hatırlatmaları (WhatsApp, Instagram, LinkedIn, X, arama, ziyaret)
+
+Onay: Telegram butonu → hemen onApprovalDecided (e-posta → scheduled, tek tık → ready)
+      Panel → app.panel_decide_approval (yalnızca onay satırı + isteğe bağlı elle düzenleme) → Worker 1. adımda uygular
+Tek tık: Telegram "Gönderdim/Atla" veya panel → app.panel_complete_touch
+Çıkış: GET /u/:token (onay sayfası) · POST /u/:token (RFC 8058 tek tık) → global reddedenler listesi
+```
+
+- **Reddedenler üç katmanda:** `checkOutbound` (kod), `app.enforce_suppression` tetikleyicisi (veritabanı; service
+  role dahil kimse atlayamaz), panel fonksiyonu tetikleyiciden dönen hatayı "iptal" olarak işler.
+- **Kişisel veri modele gitmez:** Ulak taslağına firmanın herkese açık bilgileri gider; selamlama (kişi adı) ve imza
+  kodla eklenir. Cevap sınıflandırma kural tabanlıdır (cevap metni kişisel veridir).
+- **Mail taşıyıcı** `MailTransport` arayüzünün arkasındadır; A-1 kararına kadar `DisabledMailTransport` (hiçbir şey
+  gönderilmez/okunmaz, taslak ve onay akışı çalışır).
+- **Adım performansı** `public.playbook_step_stats` görünümünden (security_invoker; RLS geçerli).

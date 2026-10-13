@@ -54,10 +54,12 @@ jobs:
           GITHUB_DISPATCH_TOKEN: ${{ secrets.GITHUB_DISPATCH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PANEL_URL: ${{ vars.PANEL_URL }}
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+          PUBLIC_TOKEN_SECRET: ${{ secrets.PUBLIC_TOKEN_SECRET }}
         run: |
           umask 077
           node -e '
-            const keys = ["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_WEBHOOK_SECRET","TELEGRAM_OWNER_ID","GEMINI_API_KEY","GROQ_API_KEY","PAGESPEED_API_KEY","IG_BUSINESS_ACCOUNT_ID","IG_ACCESS_TOKEN","GITHUB_DISPATCH_TOKEN","GITHUB_REPOSITORY","PANEL_URL"];
+            const keys = ["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_WEBHOOK_SECRET","TELEGRAM_OWNER_ID","GEMINI_API_KEY","GROQ_API_KEY","PAGESPEED_API_KEY","IG_BUSINESS_ACCOUNT_ID","IG_ACCESS_TOKEN","GITHUB_DISPATCH_TOKEN","GITHUB_REPOSITORY","PANEL_URL","PUBLIC_API_URL","PUBLIC_TOKEN_SECRET"];
             const out = Object.fromEntries(keys.filter(k => process.env[k]).map(k => [k, process.env[k]]));
             console.error("syncing:", Object.keys(out).join(", "));
             require("fs").writeFileSync(process.env.RUNNER_TEMP + "/worker-secrets.json", JSON.stringify(out));

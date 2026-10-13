@@ -47,11 +47,12 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 ## Faz 3 — Ulaşma
 
 - [ ] Mail altyapısı kararı (A-1) onaylandı
-- [ ] Playbook motoru + seed set, Ulak
-- [ ] Mail gönderim/okuma, ısınma ve limitler, iş saati zamanlaması
-- [ ] Tek tık kuyruğu (WhatsApp, Instagram, LinkedIn, X)
-- [ ] Reddedenler listesi + çıkış linki (zorunlu testler)
-- [ ] Gelen kutusu, cevap sınıflandırma, cevapta dizinin durması
+- [x] Playbook motoru + seed set, Ulak
+- [ ] Mail gönderim/okuma (A-1 bekliyor) — ısınma, limitler, iş saati zamanlaması ve `MailTransport` hazır
+- [x] Tek tık kuyruğu (WhatsApp, Instagram, LinkedIn, X) — Telegram + panel
+- [x] Reddedenler listesi + çıkış linki (zorunlu testler)
+- [x] Gelen kutusu, cevap sınıflandırma, cevapta dizinin durması
+- [x] Panel: Gelen kutusu, Playbook'lar (adım performansı), panelden onay/düzenleme, Bugün'de tek tık ve aramalar
 - [ ] **Kabul:** Aday Soğuk Ana'ya giriyor · onaylı mail iş saatinde gidiyor · cevapta dizi duruyor · "yazmayın" diyen hiçbir yoldan mesaj alamıyor
 
 ## Faz 4 — Satış

@@ -125,8 +125,8 @@ describe('Bugün', () => {
   it('shows approvals, fresh analyses and quota', async () => {
     renderAt('/');
     expect(await screen.findByText('Onay bekleyenler (1)')).toBeInTheDocument();
-    expect(screen.getByText('Mail: Örnek Klinik')).toBeInTheDocument();
-    expect(screen.getByText('Örnek Diş Kliniği')).toBeInTheDocument();
+    expect(screen.getByText(/Soğuk Ana 1\. adım/)).toBeInTheDocument();
+    expect(screen.getAllByText('Örnek Diş Kliniği').length).toBeGreaterThan(0);
     expect(screen.getByText('gemini')).toBeInTheDocument();
   });
 });
