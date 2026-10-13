@@ -73,6 +73,7 @@ Durum: ⬜ yapılmadı · ✅ tamam. Kaynak: talimat Bölüm 18.
 - [ ] Canlı sesli konuşma
 - [ ] Müşteri portalı (kapalı bayrak)
 - [ ] Gece yedeği + geri yükleme testi, gizli bilgi taraması, güvenlik gözden geçirmesi, veri saklama/silme
+- [ ] `SUPABASE_ACCESS_TOKEN` dar yetkili token ile değiştirildi (V-23)
 - [ ] Uçtan uca senaryo testi
 - [ ] Teslim dokümanları (Bölüm 19)
 - [ ] **Kabul:** Uçtan uca senaryo geçiyor · yedek geri yükleniyor · ücretsiz limitler içinde kalındığı ölçütlerde görülüyor
