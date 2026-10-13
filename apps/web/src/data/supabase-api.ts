@@ -1,6 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { FounderTerms, Settings } from '@papi/core';
+import {
+  localDate,
+  mrr,
+  type FounderTerms,
+  type Settings,
+  type SubscriptionTerms,
+} from '@papi/core';
 import type {
+  FinanceEntry,
+  FinanceSummary,
+  NoteItem,
+  PaymentItem,
+  ProjectDetail,
+  ProjectSummary,
   ApprovalItem,
   CompanySales,
   DemoSummary,
@@ -43,6 +55,10 @@ const PROPOSAL_SUMMARY =
   'id, number, status, company_id, package_code, monthly_kurus, valid_until, created_at';
 const PROPOSAL_DETAIL = `${PROPOSAL_SUMMARY}, quote, founder_discount, vat_mode, intro, scope, pdf_path, sent_at, approval_id`;
 const DEMO_COLUMNS = 'id, company_id, token, status, expires_at, visits, messages';
+const PROJECT_LIST =
+  'id, name, company_id, package_code, status, started_on, contract_end, payment_path, monthly_kurus, setup_fee_kurus, project_kurus, satisfaction';
+const PAYMENT_LIST = 'id, company_id, kind, amount_kurus, due_on, status, paid_on, payment_link';
+const today = () => localDate(new Date(), 'Europe/Istanbul');
 const MEETING_COLUMNS = 'id, company_id, status, starts_at, notes';
 
 type ProposalRowDb = Omit<ProposalSummary, 'company_name'>;
@@ -418,6 +434,161 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
       return json as T;
     },
 
+    async listProjects() {
+      const [projects, tasks] = await Promise.all([
+        db
+          .from('projects')
+          .select(PROJECT_LIST)
+          .order('started_on', { ascending: false })
+          .limit(200),
+        db.from('project_tasks').select('project_id, done').limit(5000),
+      ]);
+      const counts = new Map<string, { done: number; total: number }>();
+      for (const t of must(tasks) as { project_id: string; done: boolean }[]) {
+        const c = counts.get(t.project_id) ?? { done: 0, total: 0 };
+        c.total++;
+        if (t.done) c.done++;
+        counts.set(t.project_id, c);
+      }
+      const rows = (must(projects) as unknown as ProjectSummary[]).map((p) => ({
+        ...p,
+        tasks_done: counts.get(p.id)?.done ?? 0,
+        tasks_total: counts.get(p.id)?.total ?? 0,
+      }));
+      return withCompanyNames(db, rows);
+    },
+
+    async getProject(id) {
+      const p = must(
+        await db.from('projects').select(PROJECT_LIST).eq('id', id).maybeSingle(),
+      ) as Omit<
+        ProjectDetail,
+        'company_name' | 'tasks_done' | 'tasks_total' | 'form' | 'tasks' | 'artifacts' | 'payments'
+      > | null;
+      if (!p) return null;
+      const [tasks, form, artifacts, payments] = await Promise.all([
+        db
+          .from('project_tasks')
+          .select('id, title, module_code, done')
+          .eq('project_id', id)
+          .order('position'),
+        db
+          .from('setup_forms')
+          .select('status, token, expires_at')
+          .eq('project_id', id)
+          .maybeSingle(),
+        db.from('project_artifacts').select('kind, content').eq('project_id', id),
+        db.from('payments').select(PAYMENT_LIST).eq('project_id', id).order('due_on'),
+      ]);
+      const t = must(tasks) as ProjectDetail['tasks'];
+      const f = must(form) as {
+        status: 'sent' | 'submitted' | 'reviewed';
+        token: string;
+        expires_at: string;
+      } | null;
+      const [named] = await withCompanyNames(db, [{ company_id: p.company_id }]);
+      return {
+        ...nums(p),
+        company_name: named?.company_name ?? '',
+        tasks: t,
+        tasks_done: t.filter((x) => x.done).length,
+        tasks_total: t.length,
+        form: f
+          ? {
+              status: f.status,
+              expires_at: f.expires_at,
+              url: apiUrl ? `${apiUrl}/kurulum/${f.token}` : null,
+            }
+          : null,
+        artifacts: Object.fromEntries(
+          (must(artifacts) as { kind: string; content: string }[]).map((a) => [a.kind, a.content]),
+        ),
+        payments: (
+          await withCompanyNames(db, must(payments) as Omit<PaymentItem, 'company_name'>[])
+        ).map(nums),
+      } as ProjectDetail;
+    },
+
+    async setTaskDone(taskId, done) {
+      must(
+        await db
+          .from('project_tasks')
+          .update({ done, done_at: done ? new Date().toISOString() : null })
+          .eq('id', taskId),
+      );
+    },
+
+    async updateProject(id, patch) {
+      must(await db.from('projects').update(patch).eq('id', id));
+    },
+
+    async financeSummary(): Promise<FinanceSummary> {
+      const monthStart = `${today().slice(0, 7)}-01`;
+      const [subs, open, entries, target] = await Promise.all([
+        db
+          .from('subscriptions')
+          .select(
+            'monthly_kurus, discounted_monthly_kurus, discount_months, started_on, commitment_months, day_of_month, status',
+          )
+          .eq('status', 'active'),
+        db.from('payments').select(PAYMENT_LIST).eq('status', 'due').order('due_on').limit(200),
+        db
+          .from('finance_entries')
+          .select('id, kind, category, amount_kurus, occurred_on, note')
+          .gte('occurred_on', monthStart)
+          .order('occurred_on', { ascending: false })
+          .limit(200),
+        db.from('settings').select('value').eq('key', 'revenue_target').maybeSingle(),
+      ]);
+      const subRows = (must(subs) as SubscriptionTerms[]).map(nums);
+      const entryRows = (must(entries) as FinanceEntry[]).map(nums);
+      const sum = (k: 'income' | 'expense') =>
+        entryRows.filter((e) => e.kind === k).reduce((n, e) => n + e.amount_kurus, 0);
+      return {
+        mrrKurus: mrr(subRows, today()),
+        targetKurus:
+          (must(target) as { value: { monthly_kurus: number | null } } | null)?.value
+            .monthly_kurus ?? null,
+        open: (await withCompanyNames(db, must(open) as Omit<PaymentItem, 'company_name'>[])).map(
+          nums,
+        ),
+        monthIncomeKurus: sum('income'),
+        monthExpenseKurus: sum('expense'),
+        entries: entryRows,
+        activeSubscriptions: subRows.length,
+      };
+    },
+
+    async markPaymentPaid(id, paidOn) {
+      must(await db.from('payments').update({ status: 'paid', paid_on: paidOn }).eq('id', id));
+    },
+
+    async setPaymentLink(id, link) {
+      must(await db.from('payments').update({ payment_link: link }).eq('id', id));
+    },
+
+    async addFinanceEntry(e) {
+      must(await db.from('finance_entries').insert({ ...e, tenant_id: await tenant() }));
+    },
+
+    async listNotes(query) {
+      let q = db
+        .from('notes')
+        .select('id, body, tags, source, company_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      const s = query.replace(/[%,()]/g, ' ').trim();
+      if (s.startsWith('#')) q = q.contains('tags', [s.slice(1).toLocaleLowerCase('tr')]);
+      else if (s) q = q.ilike('body', `%${s}%`);
+      return must(await q) as NoteItem[];
+    },
+
+    async addNote(body, tags) {
+      must(
+        await db.from('notes').insert({ tenant_id: await tenant(), body, tags, source: 'panel' }),
+      );
+    },
+
     async today(): Promise<TodaySummary> {
       const since = new Date(Date.now() - 86_400_000).toISOString();
       const todayIso = new Date().toISOString().slice(0, 10);
@@ -535,4 +706,18 @@ function toDemo(r: DemoRowDb, apiUrl: string | null): Omit<DemoSummary, 'company
 function toMeeting(r: MeetingRowDb): Omit<MeetingSummary, 'company_name'> {
   const { notes, ...rest } = r;
   return { ...rest, summary: notes?.summary ?? null };
+}
+
+/** bigint amounts can arrive as strings; normalize to numbers. */
+function nums<T>(row: T): T {
+  const r = { ...(row as Record<string, unknown>) };
+  for (const k of [
+    'monthly_kurus',
+    'setup_fee_kurus',
+    'project_kurus',
+    'amount_kurus',
+    'discounted_monthly_kurus',
+  ])
+    if (typeof r[k] === 'string') r[k] = Number(r[k]);
+  return r as T;
 }

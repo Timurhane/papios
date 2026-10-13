@@ -248,6 +248,75 @@ export interface CompanySales {
   demos: DemoSummary[];
 }
 
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  company_id: string;
+  package_code: string;
+  status: 'setup' | 'active' | 'paused' | 'ended';
+  started_on: string;
+  contract_end: string | null;
+  tasks_done: number;
+  tasks_total: number;
+}
+
+export interface PaymentItem {
+  id: string;
+  company_id: string;
+  company_name: string;
+  kind: 'setup' | 'monthly' | 'project' | 'other';
+  amount_kurus: number;
+  due_on: string;
+  status: 'due' | 'paid' | 'cancelled';
+  paid_on: string | null;
+  payment_link: string | null;
+}
+
+export interface ProjectDetail extends ProjectSummary {
+  company_name: string;
+  payment_path: 'no_setup' | 'setup' | 'project';
+  monthly_kurus: number | null;
+  setup_fee_kurus: number | null;
+  project_kurus: number | null;
+  satisfaction: 'positive' | 'negative' | null;
+  form: {
+    status: 'sent' | 'submitted' | 'reviewed';
+    url: string | null;
+    expires_at: string;
+  } | null;
+  tasks: { id: string; title: string; module_code: string | null; done: boolean }[];
+  artifacts: Partial<Record<'config' | 'claude_prompt' | 'checklist', string>>;
+  payments: PaymentItem[];
+}
+
+export interface FinanceEntry {
+  id: string;
+  kind: 'income' | 'expense';
+  category: string;
+  amount_kurus: number;
+  occurred_on: string;
+  note: string | null;
+}
+
+export interface FinanceSummary {
+  mrrKurus: number;
+  targetKurus: number | null;
+  open: PaymentItem[];
+  monthIncomeKurus: number;
+  monthExpenseKurus: number;
+  entries: FinanceEntry[];
+  activeSubscriptions: number;
+}
+
+export interface NoteItem {
+  id: string;
+  body: string;
+  tags: string[];
+  source: 'telegram_text' | 'telegram_voice' | 'panel';
+  company_id: string | null;
+  created_at: string;
+}
+
 /** Server-side actions on the Worker (apps/api/src/panel-api.ts). */
 export type WorkerAction =
   | 'proposal.draft'
@@ -302,4 +371,19 @@ export interface PanelApi {
     action: WorkerAction,
     body: Record<string, unknown>,
   ): Promise<T>;
+
+  // --- Operations (Phase 5) ---
+  listProjects(): Promise<(ProjectSummary & { company_name: string })[]>;
+  getProject(id: string): Promise<ProjectDetail | null>;
+  setTaskDone(taskId: string, done: boolean): Promise<void>;
+  updateProject(
+    id: string,
+    patch: Partial<Pick<ProjectDetail, 'status' | 'satisfaction'>>,
+  ): Promise<void>;
+  financeSummary(): Promise<FinanceSummary>;
+  markPaymentPaid(id: string, paidOn: string): Promise<void>;
+  setPaymentLink(id: string, link: string | null): Promise<void>;
+  addFinanceEntry(e: Omit<FinanceEntry, 'id'>): Promise<void>;
+  listNotes(query: string): Promise<NoteItem[]>;
+  addNote(body: string, tags: string[]): Promise<void>;
 }

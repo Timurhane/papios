@@ -1,5 +1,9 @@
 import { defaultSettings, quotePaths } from '@papi/core';
 import type {
+  FinanceEntry,
+  NoteItem,
+  PaymentItem,
+  ProjectDetail,
   ApprovalEdit,
   CompanySales,
   DemoSummary,
@@ -441,5 +445,128 @@ export class FakePanelApi implements PanelApi {
     if (action === 'proposal.sent' && p) p.status = 'sent';
     if (action === 'proposal.close' && p) p.status = body.outcome as 'accepted' | 'rejected';
     return (this.workerReplies[action] ?? { ok: true }) as T;
+  }
+
+  // --- operations ---
+  project: ProjectDetail = {
+    id: 'pr1',
+    name: 'Örnek Diş Kliniği — Sistem',
+    company_id: 'c1',
+    company_name: 'Örnek Diş Kliniği',
+    package_code: 'sistem',
+    status: 'setup',
+    started_on: '2026-10-13',
+    contract_end: '2027-01-12',
+    tasks_done: 0,
+    tasks_total: 2,
+    payment_path: 'setup',
+    monthly_kurus: 2_167_500,
+    setup_fee_kurus: 1_530_000,
+    project_kurus: null,
+    satisfaction: null,
+    form: {
+      status: 'submitted',
+      url: 'https://api.test/kurulum/abc',
+      expires_at: '2026-11-12T00:00:00Z',
+    },
+    tasks: [
+      { id: 't1', title: 'Kurulum formu gözden geçirildi', module_code: null, done: false },
+      {
+        id: 't2',
+        title: 'Site sohbet kutusu kodu siteye eklendi',
+        module_code: 'cevap-asistani',
+        done: false,
+      },
+    ],
+    artifacts: {
+      claude_prompt: '# Örnek Diş Kliniği — Sistem kurulumu\nwrangler secret put',
+      config: '{"version":1}',
+    },
+    payments: [],
+  };
+  payments: PaymentItem[] = [
+    {
+      id: 'pay1',
+      company_id: 'c1',
+      company_name: 'Örnek Diş Kliniği',
+      kind: 'setup',
+      amount_kurus: 1_530_000,
+      due_on: '2026-10-13',
+      status: 'due',
+      paid_on: null,
+      payment_link: null,
+    },
+  ];
+  financeEntries: FinanceEntry[] = [];
+  noteRows: NoteItem[] = [
+    {
+      id: 'n1',
+      body: 'Klinikler için #randevu paketi fikri',
+      tags: ['randevu'],
+      source: 'telegram_text',
+      company_id: null,
+      created_at: '2026-10-13T09:00:00Z',
+    },
+  ];
+
+  async listProjects() {
+    return [this.project];
+  }
+  async getProject(id: string) {
+    return id === this.project.id ? this.project : null;
+  }
+  async setTaskDone(taskId: string, done: boolean) {
+    const t = this.project.tasks.find((x) => x.id === taskId);
+    if (t) t.done = done;
+    this.project.tasks_done = this.project.tasks.filter((x) => x.done).length;
+  }
+  async updateProject(id: string, patch: Partial<Pick<ProjectDetail, 'status' | 'satisfaction'>>) {
+    if (id === this.project.id) Object.assign(this.project, patch);
+  }
+  async financeSummary() {
+    return {
+      mrrKurus: 1_734_000,
+      targetKurus: 10_000_000,
+      open: this.payments.filter((p) => p.status === 'due'),
+      monthIncomeKurus: this.financeEntries
+        .filter((e) => e.kind === 'income')
+        .reduce((n, e) => n + e.amount_kurus, 0),
+      monthExpenseKurus: this.financeEntries
+        .filter((e) => e.kind === 'expense')
+        .reduce((n, e) => n + e.amount_kurus, 0),
+      entries: this.financeEntries,
+      activeSubscriptions: 1,
+    };
+  }
+  async markPaymentPaid(id: string, paidOn: string) {
+    const p = this.payments.find((x) => x.id === id);
+    if (p) Object.assign(p, { status: 'paid', paid_on: paidOn });
+  }
+  async setPaymentLink(id: string, link: string | null) {
+    const p = this.payments.find((x) => x.id === id);
+    if (p) p.payment_link = link;
+  }
+  async addFinanceEntry(e: Omit<FinanceEntry, 'id'>) {
+    this.financeEntries.push({ ...e, id: `f${this.financeEntries.length + 1}` });
+  }
+  async listNotes(query: string) {
+    const q = query.trim().toLocaleLowerCase('tr');
+    return this.noteRows.filter((n) =>
+      !q
+        ? true
+        : q.startsWith('#')
+          ? n.tags.includes(q.slice(1))
+          : n.body.toLocaleLowerCase('tr').includes(q),
+    );
+  }
+  async addNote(body: string, tags: string[]) {
+    this.noteRows.unshift({
+      id: `n${this.noteRows.length + 1}`,
+      body,
+      tags,
+      source: 'panel',
+      company_id: null,
+      created_at: '2026-10-13T10:00:00Z',
+    });
   }
 }

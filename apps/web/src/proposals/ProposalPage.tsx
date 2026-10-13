@@ -181,15 +181,30 @@ function ProposalView({
           )}
           {p.status === 'sent' && (
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={busy || !api.workerAvailable()}
-                onClick={() =>
-                  run(() => api.worker('proposal.close', { proposalId: p.id, outcome: 'accepted' }))
-                }
-              >
-                Kabul edildi
-              </Button>
+              {(quote?.kind === 'paths'
+                ? ([
+                    ['no_setup', 'Kabul edildi (kurulumsuz)'],
+                    ['setup', 'Kabul edildi (kurulumlu)'],
+                  ] as const)
+                : ([[null, 'Kabul edildi']] as const)
+              ).map(([path, label]) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  disabled={busy || !api.workerAvailable()}
+                  onClick={() =>
+                    run(() =>
+                      api.worker('proposal.close', {
+                        proposalId: p.id,
+                        outcome: 'accepted',
+                        ...(path ? { path } : {}),
+                      }),
+                    )
+                  }
+                >
+                  {label}
+                </Button>
+              ))}
               <Button
                 size="sm"
                 variant="ghost"

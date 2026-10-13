@@ -10,6 +10,11 @@ import { NewProposalPage } from '@/proposals/NewProposalPage';
 import { ProposalPage } from '@/proposals/ProposalPage';
 import { ProposalsPage } from '@/proposals/ProposalsPage';
 import { DemosPage } from '@/sales/DemosPage';
+import { FinancePage } from '@/ops/FinancePage';
+import { ModulesPage } from '@/ops/ModulesPage';
+import { NotesPage } from '@/ops/NotesPage';
+import { ProjectPage } from '@/ops/ProjectPage';
+import { ProjectsPage } from '@/ops/ProjectsPage';
 import { TodayPage } from '@/today/TodayPage';
 import { ModulePlaceholder } from '@/pages/ModulePlaceholder';
 import { NotFound } from '@/pages/NotFound';
@@ -21,6 +26,10 @@ const IMPLEMENTED = new Set([
   '/playbooklar',
   '/teklifler',
   '/demolar',
+  '/projeler',
+  '/finans',
+  '/notlar',
+  '/teslim-modulleri',
 ]);
 
 export function App() {
@@ -37,6 +46,11 @@ export function App() {
           <Route path="/teklifler/yeni" element={<NewProposalPage />} />
           <Route path="/teklifler/:id" element={<ProposalPage />} />
           <Route path="/demolar" element={<DemosPage />} />
+          <Route path="/projeler" element={<ProjectsPage />} />
+          <Route path="/projeler/:id" element={<ProjectPage />} />
+          <Route path="/finans" element={<FinancePage />} />
+          <Route path="/notlar" element={<NotesPage />} />
+          <Route path="/teslim-modulleri" element={<ModulesPage />} />
           {panelModules
             .filter((m) => !IMPLEMENTED.has(m.path))
             .map((m) => (

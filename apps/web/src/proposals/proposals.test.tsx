@@ -81,10 +81,10 @@ describe('Teklif stüdyosu', () => {
       pdf_path: 't/p1.pdf',
     });
     renderAt('/teklifler/p1', api);
-    await userEvent.click(await screen.findByRole('button', { name: 'Kabul edildi' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Kabul edildi (kurulumlu)' }));
     expect(api.workerCalls).toContainEqual({
       action: 'proposal.close',
-      body: { proposalId: 'p1', outcome: 'accepted' },
+      body: { proposalId: 'p1', outcome: 'accepted', path: 'setup' },
     });
   });
 

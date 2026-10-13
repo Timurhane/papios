@@ -21,7 +21,8 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "@papi/modules": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
