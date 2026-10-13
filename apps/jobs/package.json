@@ -4,9 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "tsx src/main.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@papi/core": "workspace:*"
+    "@papi/core": "workspace:*",
+    "@papi/server": "workspace:*",
+    "playwright": "^1.64.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }

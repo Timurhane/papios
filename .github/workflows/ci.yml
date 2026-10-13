@@ -89,3 +89,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @papi/web exec playwright install --with-deps chromium
       - run: pnpm --filter @papi/web e2e
+      - name: Deep-crawl renderer (real browser)
+        run: RUN_BROWSER_TESTS=1 pnpm vitest run --project jobs src/render.test.ts
