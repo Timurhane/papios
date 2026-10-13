@@ -47,6 +47,12 @@ importers:
       '@papi/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@papi/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
+      '@supabase/supabase-js':
+        specifier: ^2.117.3
+        version: 2.117.3
       hono:
         specifier: ^4.13.13
         version: 4.13.13

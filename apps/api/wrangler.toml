@@ -7,4 +7,6 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 APP_ENV = "production"
 
-# Cron triggers are added in Phase 1 (queue dispatcher).
+# One every-minute trigger runs the queue dispatcher and schedules maintenance (free plan: 5 per account).
+[triggers]
+crons = ["* * * * *"]
