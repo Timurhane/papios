@@ -19,6 +19,7 @@ import { papiSystem } from '@papi/prompts';
 import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
+import { handleOpsCommand, OPS_HELP } from './ops-bot.ts';
 import {
   afterProposalDecision,
   handleSalesCallback,
@@ -32,6 +33,7 @@ import {
   type ApprovalRow,
   type OutreachDeps,
   type Repo,
+  type OpsDeps,
   type SalesDeps,
   type TelegramApi,
 } from '@papi/server';
@@ -45,6 +47,8 @@ export interface BotDeps {
   outreach?: OutreachDeps;
   /** Sales (Phase 4). */
   sales?: SalesDeps;
+  /** Operations (Phase 5). */
+  ops?: OpsDeps;
   publicApiUrl?: string;
   panelUrl?: string;
 }
@@ -62,6 +66,7 @@ Komutlar:
 /rapor – kullanım ve sağlık raporu
 /kota – yapay zeka kota durumu
 ${SALES_HELP}
+${OPS_HELP}
 /uyuyorum – sessiz mod
 /uyandim – sessiz modu kapat ve özet al`;
 
@@ -236,6 +241,12 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
     case 'saat':
     case 'demo':
       await handleSalesCommand(command, args, chatId, deps);
+      return;
+
+    case 'not':
+    case 'tahsilat':
+    case 'proje':
+      await handleOpsCommand(command, args, chatId, deps);
       return;
 
     case 'ekle': {

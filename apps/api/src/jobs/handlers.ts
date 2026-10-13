@@ -2,11 +2,15 @@ import { formatApprovalGroup, JobRegistry, normalizeName, type LLMService } from
 import {
   addFromLink,
   analyzeCompanies,
+  draftMonthlyReports,
   draftReply,
+  notifyOverdue,
+  syncCharges,
   findWebsiteByName,
   formatOutcome,
   upsertCompany,
   type InstagramDiscovery,
+  type OpsDeps,
   type SalesDeps,
 } from '@papi/server';
 import { approvalRevise } from '@papi/prompts';
@@ -25,6 +29,8 @@ export interface JobDeps {
   fetchFn?: typeof fetch;
   /** Satıcı (Phase 4): reply drafts. */
   sales?: SalesDeps;
+  /** Operatör (Phase 5): charges, overdue alerts, client reports. */
+  ops?: OpsDeps;
 }
 
 const EMBED_BATCH = 16;
@@ -112,6 +118,24 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
           return; // one table per run keeps the cron tick inside the subrequest budget
         }
       })
+      .register('finance.daily', async () => {
+        if (!deps.ops) return;
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(
+          new Date(),
+        );
+        await syncCharges(deps.ops, today);
+        await notifyOverdue(deps.ops);
+      })
+      .register('client.monthly_report', async () => {
+        if (!deps.ops) return;
+        const n = await draftMonthlyReports(deps.ops);
+        if (n)
+          await notify(
+            deps,
+            'approval_pending',
+            `📊 ${n} aylık müşteri raporu onay bekliyor: /onaylar`,
+          );
+      })
       // Satıcı: answer draft for an interested / question reply (redacted input, K-4.9).
       .register('satici.reply_draft', async (job) => {
         if (!deps.sales) return;
@@ -189,5 +213,11 @@ export function scheduledJobs(now: Date): { type: string; payload: Record<string
   if (now.getUTCMinutes() % 15 === 0) out.push({ type: 'embed.missing', payload: {} });
   if (now.getUTCHours() === 3 && now.getUTCMinutes() === 7)
     out.push({ type: 'llm.verify_models', payload: {} });
+  // 09:05 Istanbul: monthly charges + overdue alerts (K-13.8, K-15.4)
+  if (now.getUTCHours() === 6 && now.getUTCMinutes() === 5)
+    out.push({ type: 'finance.daily', payload: {} });
+  // 1st of the month 09:20 Istanbul: client report drafts (Phase 5)
+  if (now.getUTCDate() === 1 && now.getUTCHours() === 6 && now.getUTCMinutes() === 20)
+    out.push({ type: 'client.monthly_report', payload: {} });
   return out;
 }

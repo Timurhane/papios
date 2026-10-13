@@ -4,6 +4,8 @@ import { ZodError } from 'zod';
 import { handleUpdate } from './bot.ts';
 import { demoExpiredPage, demoNotFoundPage, demoPage, handleDemoChat } from './demo.ts';
 import { authenticatePanel, isPanelAction, PanelError, runPanelAction } from './panel-api.ts';
+import { renderSetupForm, submitSetupForm, type SetupFormDeps } from './setup-form.ts';
+import { acceptMetrics } from '@papi/server';
 import type { AppDeps } from './deps.ts';
 import { isConfigured, missingSecrets, parseEnv, type ConfiguredEnv } from './env.ts';
 import {
@@ -126,6 +128,72 @@ export function createApp(opts: AppOptions = {}) {
       c.req.header('cf-connecting-ip') ?? null,
     );
     return c.json(r.body, r.status);
+  });
+
+  // K-14.4 setup form: public, unguessable token, Turnstile in production.
+  const formDeps = (env: ConfiguredEnv, deps: AppDeps): SetupFormDeps | null =>
+    deps.ops
+      ? {
+          ops: deps.ops,
+          turnstileSecret: env.TURNSTILE_SECRET_KEY ?? null,
+          turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
+          requireTurnstile: env.APP_ENV === 'production',
+          ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+        }
+      : null;
+  app.get('/kurulum/:token', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.text('Kullanılamıyor', 503);
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    const fd = formDeps(env, deps);
+    if (!fd) return c.text('Kullanılamıyor', 503);
+    const r = await renderSetupForm(fd, c.req.param('token'));
+    c.header('cache-control', 'no-store');
+    return c.html(r.html, r.status as 200);
+  });
+  app.post('/kurulum/:token', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.text('Kullanılamıyor', 503);
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    const fd = formDeps(env, deps);
+    if (!fd) return c.text('Kullanılamıyor', 503);
+    let form: FormData;
+    try {
+      form = await c.req.formData();
+    } catch {
+      return c.text('Geçersiz istek', 400);
+    }
+    const r = await submitSetupForm(
+      fd,
+      c.req.param('token'),
+      form,
+      c.req.header('cf-connecting-ip') ?? null,
+    );
+    return c.html(r.html, r.status as 200);
+  });
+
+  // Delivered modules post monthly aggregate counts (no personal data) with the project's token.
+  app.post('/metrics/push', async (c) => {
+    const env = parseEnv(c.env ?? {});
+    if (!isConfigured(env)) return c.json({ error: 'not_configured' }, 503);
+    const token = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization') ?? '')?.[1] ?? '';
+    const deps = await (opts.buildDeps ?? (await import('./deps.ts')).buildDeps)(env);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    const key = [...new Uint8Array(digest).slice(0, 12)]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    if (!(await deps.repo.hitRateLimit(`metrics:${key}`, 3600, 30)))
+      return c.json({ error: 'rate_limited' }, 429);
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'bad_request' }, 400);
+    }
+    const r = await acceptMetrics(deps.repo, token, body);
+    return r === 'ok'
+      ? c.json({ ok: true })
+      : c.json({ error: r }, r === 'unauthorized' ? 401 : 400);
   });
 
   // Panel → Worker actions (user's own session, aal2, tenant member).

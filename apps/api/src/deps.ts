@@ -15,6 +15,7 @@ import {
   InstagramDiscovery,
   SupabaseRepo,
   type CalendarProvider,
+  type OpsDeps,
   type OutreachDeps,
   type SalesDeps,
 } from '@papi/server';
@@ -38,6 +39,8 @@ export interface AppDeps {
   sales?: SalesDeps;
   /** Public base URL for demo links; absent until PUBLIC_API_URL is set. */
   publicApiUrl?: string;
+  /** Operations (Phase 5): projects, setup forms, finance, reports. */
+  ops?: OpsDeps;
   /** Injected in tests for outbound calls made by route handlers (Supabase Auth check). */
   fetchImpl?: typeof fetch;
 }
@@ -94,6 +97,9 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
           },
         }
       : undefined;
+  const opsNotify: OpsDeps['notify'] = async (kind, text) => {
+    await notify({ repo, tg, ownerChatId: env.TELEGRAM_OWNER_ID }, kind, text);
+  };
   const token = env.GITHUB_DISPATCH_TOKEN;
   const repoName = env.GITHUB_REPOSITORY;
   return {
@@ -103,7 +109,18 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
     ownerId: env.TELEGRAM_OWNER_ID,
     instagram,
     ...(outreach ? { outreach } : {}),
-    sales: { repo, llm, calendar: buildCalendar(env) },
+    sales: {
+      repo,
+      llm,
+      calendar: buildCalendar(env),
+      ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
+      notify: opsNotify,
+    },
+    ops: {
+      repo,
+      ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
+      notify: opsNotify,
+    },
     ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
     pageSpeedKey: env.PAGESPEED_API_KEY,
     panelUrl: env.PANEL_URL,

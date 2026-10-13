@@ -47,6 +47,9 @@ importers:
       '@papi/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@papi/modules':
+        specifier: workspace:*
+        version: link:../../packages/modules
       '@papi/prompts':
         specifier: workspace:*
         version: link:../../packages/prompts

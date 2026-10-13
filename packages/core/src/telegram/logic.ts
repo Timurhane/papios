@@ -21,6 +21,9 @@ export const COMMANDS = [
   'teklif',
   'saat',
   'demo',
+  'not',
+  'tahsilat',
+  'proje',
   'start',
   'yardim',
 ] as const;

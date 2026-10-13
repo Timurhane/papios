@@ -32,7 +32,11 @@ export const panelActions = {
   'proposal.vat': z.object({ proposalId: uuid, mode: z.enum(['included', 'excluded']) }),
   'proposal.submit': z.object({ proposalId: uuid }),
   'proposal.sent': z.object({ proposalId: uuid }),
-  'proposal.close': z.object({ proposalId: uuid, outcome: z.enum(['accepted', 'rejected']) }),
+  'proposal.close': z.object({
+    proposalId: uuid,
+    outcome: z.enum(['accepted', 'rejected']),
+    path: z.enum(['no_setup', 'setup']).optional(),
+  }),
   'meeting.propose': z.object({ companyId: uuid }),
   'meeting.schedule': z.object({ meetingId: uuid, start: z.iso.datetime({ offset: true }) }),
   'meeting.note': z.object({ companyId: uuid, text: z.string().min(3).max(20_000) }),
@@ -101,7 +105,7 @@ export async function runPanelAction(
     }
     case 'proposal.close': {
       const b = panelActions[action].parse(raw);
-      return { ok: await closeProposal(deps, b.proposalId, b.outcome) };
+      return { ok: await closeProposal(deps, b.proposalId, b.outcome, b.path ?? null) };
     }
     case 'meeting.propose': {
       const b = panelActions[action].parse(raw);

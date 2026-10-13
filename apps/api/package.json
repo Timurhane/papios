@@ -13,7 +13,8 @@
     "hono": "^4.13.13",
     "zod": "^4.6.7",
     "@papi/prompts": "workspace:*",
-    "@papi/server": "workspace:*"
+    "@papi/server": "workspace:*",
+    "@papi/modules": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261012.1",
