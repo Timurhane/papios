@@ -1,11 +1,22 @@
 import {
   defaultSettings,
   MemoryLLMStore,
+  type DedupeKeys,
   type Job,
   type QueueStore,
   type Settings,
 } from '@papi/core';
-import type { ApprovalRow, EmbeddingTable, KnowledgeHit, Repo, UsageSummary } from './types.ts';
+import type {
+  AnalysisRecord,
+  ApprovalRow,
+  CompanyPatch,
+  CompanyRow,
+  EmbeddingTable,
+  KnowledgeHit,
+  NewCompany,
+  Repo,
+  UsageSummary,
+} from './types.ts';
 
 /** In-memory Repo for tests. Mirrors SupabaseRepo semantics closely enough to test the bot. */
 export class MemoryRepo implements Repo {
@@ -27,6 +38,18 @@ export class MemoryRepo implements Repo {
   jobs: (Job & { heavy: boolean; status: string })[] = [];
   errors: { source: string; severity: string; message: string }[] = [];
   auditLog: { action: string; details: Record<string, unknown> }[] = [];
+  companies: (CompanyRow & Record<string, unknown>)[] = [];
+  analyses: (AnalysisRecord & { id: string })[] = [];
+  scores: { companyId: string; total: number }[] = [];
+  events: { companyId: string; kind: string; summary: string }[] = [];
+  contacts: {
+    companyId: string;
+    source: string;
+    full_name?: string | null;
+    email?: string | null;
+  }[] = [];
+  memories: { subjectId: string; kind: string; content: string }[] = [];
+  signalsByCompany = new Map<string, string[]>();
   private seq = 0;
 
   private id() {
@@ -193,6 +216,95 @@ export class MemoryRepo implements Repo {
       queued: this.jobs.filter((j) => j.status === 'queued').length,
       dead: this.jobs.filter((j) => j.status === 'dead').length,
     };
+  }
+
+  // --- CRM ---
+  async findCompany(k: DedupeKeys) {
+    return (
+      this.companies.find(
+        (c) =>
+          (k.domain && c.domain === k.domain) ||
+          (k.phone && c.phone_e164 === k.phone) ||
+          (k.instagram && c.instagram_handle === k.instagram) ||
+          (k.city &&
+            c.name_norm === k.nameNorm &&
+            (c.city ?? '').toLocaleLowerCase('tr') === k.city),
+      ) ?? null
+    );
+  }
+  async getCompany(id: string) {
+    return this.companies.find((c) => c.id === id) ?? null;
+  }
+  async createCompany(input: NewCompany) {
+    const id = this.id();
+    const for_ = (k: string) =>
+      k === 'domain' || k === 'phone_e164' || k === 'instagram_handle'
+        ? input[k as keyof NewCompany]
+        : undefined;
+    for (const key of ['domain', 'phone_e164', 'instagram_handle'] as const) {
+      const v = for_(key);
+      if (v && this.companies.some((c) => c[key] === v)) throw new Error(`duplicate ${key}`);
+    }
+    this.companies.push({
+      id,
+      domain: null,
+      phone_e164: null,
+      website_url: null,
+      instagram_handle: null,
+      maps_url: null,
+      emails: [],
+      city: null,
+      district: null,
+      address: null,
+      sector: null,
+      verified: false,
+      stage: 'new',
+      score: null,
+      score_rationale: [],
+      next_step_kind: 'waiting',
+      assigned_playbook: null,
+      waiting_reason: 'Analiz bekliyor',
+      waiting_until: new Date().toISOString().slice(0, 10),
+      last_analyzed_at: null,
+      ...input,
+    });
+    return id;
+  }
+  async updateCompany(id: string, patch: CompanyPatch) {
+    const c = this.companies.find((x) => x.id === id);
+    if (!c) throw new Error('company not found');
+    Object.assign(c, patch);
+    const ok =
+      (c.next_step_kind === 'playbook' && c.assigned_playbook) ||
+      (c.next_step_kind === 'waiting' && c.waiting_reason && c.waiting_until) ||
+      c.next_step_kind === 'closed';
+    if (!ok) throw new Error('companies_next_step violated');
+  }
+  async addAnalysis(a: AnalysisRecord) {
+    const id = this.id();
+    this.analyses.push({ ...a, id });
+    return id;
+  }
+  async addScore(companyId: string, s: { total: number }) {
+    this.scores.push({ companyId, total: s.total });
+  }
+  async addCompanyEvent(companyId: string, kind: string, summary: string) {
+    this.events.push({ companyId, kind, summary });
+  }
+  async addContact(
+    companyId: string,
+    c: { full_name?: string | null; email?: string | null; source: string },
+  ) {
+    this.contacts.push({ companyId, ...c });
+  }
+  async addMemory(subjectId: string, kind: string, content: string) {
+    this.memories.push({ subjectId, kind, content });
+  }
+  async activeSignals(companyId: string) {
+    return this.signalsByCompany.get(companyId) ?? [];
+  }
+  async companiesAwaitingAnalysis(limit: number) {
+    return this.companies.filter((c) => c.stage === 'new').slice(0, limit);
   }
 }
 

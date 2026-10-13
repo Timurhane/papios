@@ -250,7 +250,9 @@ export class LLMService {
   // --- internals -------------------------------------------------------------------------------
 
   private async generateInternal(req: GenerateRequest, json: boolean): Promise<GenerateResult> {
-    const cacheKey = req.noCache ? null : await this.cacheKey('generate', { ...req, json });
+    // Grounded answers reflect the live web; never serve them from cache.
+    const cacheKey =
+      req.noCache || req.grounding ? null : await this.cacheKey('generate', { ...req, json });
     if (cacheKey) {
       const hit = await this.opts.store.getCache(cacheKey);
       if (typeof hit === 'string') {
@@ -265,7 +267,9 @@ export class LLMService {
       }
     }
 
-    const candidates = this.candidatesFor(req.tier);
+    const candidates = this.candidatesFor(req.tier).filter(
+      (c) => !req.grounding || c.provider.supportsGrounding,
+    );
     if (candidates.length === 0)
       throw new LLMNotConfiguredError(`no model configured for tier ${req.tier}`);
 
@@ -280,6 +284,19 @@ export class LLMService {
         blockedByClass++;
         await this.log(req, req.tier, c.provider.id, c.model, { status: 'blocked' });
         continue;
+      }
+      if (req.grounding) {
+        // Grounded requests are metered separately by the provider (K-8.1).
+        const ground = `${c.provider.id}_ground`;
+        const g = this.opts.settings.quotas[ground];
+        if (
+          !g?.enabled ||
+          !(await this.opts.store.consumeQuota(ground, g.rpm, g.rpd, g.day_timezone))
+        ) {
+          outOfQuota++;
+          await this.log(req, req.tier, c.provider.id, c.model, { status: 'quota_exhausted' });
+          continue;
+        }
       }
       if (
         !(await this.opts.store.consumeQuota(c.bucket, bucket.rpm, bucket.rpd, bucket.day_timezone))
@@ -297,7 +314,8 @@ export class LLMService {
           messages: req.messages,
           temperature: req.temperature,
           maxOutputTokens: req.maxOutputTokens,
-          json,
+          json: json && !req.grounding,
+          grounding: req.grounding,
         });
         await this.log(req, req.tier, c.provider.id, c.model, {
           status: 'ok',
@@ -313,6 +331,7 @@ export class LLMService {
           model: c.model,
           usage: out.usage,
           cached: false,
+          ...(out.sources ? { sources: out.sources } : {}),
         };
       } catch (err) {
         lastError = err;

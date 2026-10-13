@@ -9,13 +9,18 @@ interface GeminiPart {
   inlineData?: { mimeType: string; data: string };
 }
 interface GeminiResponse {
-  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
+  candidates?: {
+    content?: { parts?: GeminiPart[] };
+    finishReason?: string;
+    groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] };
+  }[];
   promptFeedback?: { blockReason?: string };
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
 }
 
 export class GeminiProvider implements LLMProvider {
   readonly id = 'gemini' as const;
+  readonly supportsGrounding = true;
 
   constructor(
     private readonly apiKey: string,
@@ -38,6 +43,7 @@ export class GeminiProvider implements LLMProvider {
         ...(input.maxOutputTokens !== undefined ? { maxOutputTokens: input.maxOutputTokens } : {}),
         ...(input.json ? { responseMimeType: 'application/json' } : {}),
       },
+      ...(input.grounding ? { tools: [{ google_search: {} }] } : {}),
     };
     const res = await safeFetch(
       this.id,
@@ -58,12 +64,17 @@ export class GeminiProvider implements LLMProvider {
         data.promptFeedback?.blockReason ?? data.candidates?.[0]?.finishReason ?? 'empty response';
       throw new ProviderError(this.id, 200, `no text (${reason})`);
     }
+    const sources = (data.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+      .map((c) => c.web)
+      .filter((w): w is { uri: string; title?: string } => Boolean(w?.uri))
+      .map((w) => ({ uri: w.uri, title: w.title ?? null }));
     return {
       text,
       usage: {
         tokensIn: data.usageMetadata?.promptTokenCount ?? 0,
         tokensOut: data.usageMetadata?.candidatesTokenCount ?? 0,
       },
+      ...(sources.length ? { sources } : {}),
     };
   }
 

@@ -272,3 +272,39 @@ describe('embed / transcribe / speak', () => {
     ).toBeNull();
   });
 });
+
+describe('grounding (K-8.1)', () => {
+  it('uses only grounding-capable providers, its own bucket, and never the cache', async () => {
+    const store = new MemoryLLMStore();
+    const seen: ProviderGenerateInput[] = [];
+    const gemini: LLMProvider = {
+      id: 'gemini',
+      supportsGrounding: true,
+      async generate(input) {
+        seen.push(input);
+        return {
+          text: 'Örnek Klinik | ornek.com',
+          usage: { tokensIn: 1, tokensOut: 1 },
+          sources: [{ uri: 'https://ornek.com', title: 'Örnek' }],
+        };
+      },
+    };
+    const groq: LLMProvider = {
+      id: 'groq',
+      async generate() {
+        throw new Error('must not be used');
+      },
+    };
+    const service = new LLMService({
+      providers: { gemini, groq },
+      settings: defaultSettings.llm,
+      store,
+    });
+    const r1 = await service.generate({ ...req, grounding: true });
+    await service.generate({ ...req, grounding: true });
+    expect(r1.sources).toEqual([{ uri: 'https://ornek.com', title: 'Örnek' }]);
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toMatchObject({ grounding: true, json: false });
+    expect(store.used.get('gemini_ground')).toBe(2);
+  });
+});

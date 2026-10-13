@@ -9,7 +9,21 @@ import {
   type QueueStore,
   type Settings,
 } from '@papi/core';
-import type { ApprovalRow, EmbeddingTable, KnowledgeHit, Repo, UsageSummary } from './types.ts';
+import type { DedupeKeys } from '@papi/core';
+import type {
+  AnalysisRecord,
+  ApprovalRow,
+  CompanyPatch,
+  CompanyRow,
+  EmbeddingTable,
+  KnowledgeHit,
+  NewCompany,
+  Repo,
+  UsageSummary,
+} from './types.ts';
+
+const COMPANY_COLUMNS =
+  'id, name, name_norm, domain, phone_e164, website_url, instagram_handle, maps_url, emails, city, district, address, sector, source, verified, stage, score, score_rationale, next_step_kind, assigned_playbook, waiting_reason, waiting_until, last_analyzed_at';
 
 const vec = (v: number[]) => `[${v.join(',')}]`;
 
@@ -568,5 +582,170 @@ export class SupabaseRepo implements Repo {
       queued: queued.count ?? 0,
       dead: dead.count ?? 0,
     };
+  }
+
+  // --- CRM -----------------------------------------------------------------------------------
+
+  async findCompany(keys: DedupeKeys): Promise<CompanyRow | null> {
+    const base = () =>
+      this.db.from('companies').select(COMPANY_COLUMNS).eq('tenant_id', this.tenantId).limit(1);
+    const tries = [
+      keys.domain ? base().eq('domain', keys.domain) : null,
+      keys.phone ? base().eq('phone_e164', keys.phone) : null,
+      keys.instagram ? base().eq('instagram_handle', keys.instagram) : null,
+      keys.nameNorm && keys.city
+        ? base().eq('name_norm', keys.nameNorm).ilike('city', keys.city)
+        : null,
+    ];
+    for (const q of tries) {
+      if (!q) continue;
+      const rows = must(await q, 'find company') as unknown as CompanyRow[];
+      if (rows[0]) return rows[0];
+    }
+    return null;
+  }
+
+  async getCompany(id: string): Promise<CompanyRow | null> {
+    return must(
+      await this.db
+        .from('companies')
+        .select(COMPANY_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'get company',
+    ) as unknown as CompanyRow | null;
+  }
+
+  async createCompany(input: NewCompany): Promise<string> {
+    const row = must(
+      await this.db
+        .from('companies')
+        .insert({
+          waiting_reason: 'Analiz bekliyor',
+          waiting_until: new Date().toISOString().slice(0, 10),
+          ...input,
+          tenant_id: this.tenantId,
+        })
+        .select('id')
+        .single(),
+      'create company',
+    ) as { id: string };
+    return row.id;
+  }
+
+  async updateCompany(id: string, patch: CompanyPatch) {
+    must(
+      await this.db.from('companies').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update company',
+    );
+  }
+
+  async addAnalysis(a: AnalysisRecord) {
+    const row = must(
+      await this.db
+        .from('analyses')
+        .insert({
+          tenant_id: this.tenantId,
+          company_id: a.companyId,
+          kind: a.kind,
+          status: a.status,
+          signals: a.signals ?? {},
+          pagespeed: a.pagespeed ?? null,
+          findings: a.findings,
+          strongest_finding: a.strongestFinding,
+          error: a.error ?? null,
+        })
+        .select('id')
+        .single(),
+      'add analysis',
+    ) as { id: string };
+    return row.id;
+  }
+
+  async addScore(
+    companyId: string,
+    s: { total: number; fit: number; pain: number; reach: number; rationale: string[] },
+  ) {
+    must(
+      await this.db
+        .from('score_history')
+        .insert({ tenant_id: this.tenantId, company_id: companyId, ...s }),
+      'add score',
+    );
+  }
+
+  async addCompanyEvent(
+    companyId: string,
+    kind: string,
+    summary: string,
+    data: Record<string, unknown> = {},
+  ) {
+    must(
+      await this.db
+        .from('company_events')
+        .insert({ tenant_id: this.tenantId, company_id: companyId, kind, summary, data }),
+      'company event',
+    );
+  }
+
+  async addContact(
+    companyId: string,
+    c: {
+      full_name?: string | null;
+      role?: string | null;
+      email?: string | null;
+      phone_e164?: string | null;
+      is_decision_maker?: boolean;
+      source: string;
+    },
+  ) {
+    must(
+      await this.db
+        .from('contacts')
+        .insert({ tenant_id: this.tenantId, company_id: companyId, ...c }),
+      'add contact',
+    );
+  }
+
+  async addMemory(subjectId: string, kind: 'analysis' | 'note', content: string) {
+    must(
+      await this.db.from('memory_items').insert({
+        tenant_id: this.tenantId,
+        subject_type: 'company',
+        subject_id: subjectId,
+        kind,
+        content,
+      }),
+      'add memory',
+    );
+  }
+
+  async activeSignals(companyId: string) {
+    const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
+    const rows = must(
+      await this.db
+        .from('signals')
+        .select('description')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .gte('detected_at', since)
+        .limit(5),
+      'signals',
+    ) as { description: string }[];
+    return rows.map((r) => r.description);
+  }
+
+  async companiesAwaitingAnalysis(limit: number) {
+    return must(
+      await this.db
+        .from('companies')
+        .select(COMPANY_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('stage', 'new')
+        .order('created_at')
+        .limit(limit),
+      'awaiting analysis',
+    ) as unknown as CompanyRow[];
   }
 }

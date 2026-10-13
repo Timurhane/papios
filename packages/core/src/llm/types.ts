@@ -33,6 +33,8 @@ export interface GenerateRequest extends CallMeta {
   maxOutputTokens?: number;
   /** Skip the cache, e.g. for conversational turns that must not repeat. */
   noCache?: boolean;
+  /** Ground the answer with web search (Gemini google_search, K-8.1). Results must be verified before use. */
+  grounding?: boolean;
 }
 
 export interface StructuredRequest<T> extends GenerateRequest {
@@ -52,6 +54,8 @@ export interface GenerateResult {
   model: string | null;
   usage: Usage;
   cached: boolean;
+  /** Web sources when the answer was grounded. */
+  sources?: { uri: string; title: string | null }[];
 }
 
 /** What an adapter receives: a fully routed request. */
@@ -62,15 +66,19 @@ export interface ProviderGenerateInput {
   temperature?: number;
   maxOutputTokens?: number;
   json: boolean;
+  grounding?: boolean;
 }
 
 export interface ProviderGenerateOutput {
   text: string;
   usage: Usage;
+  sources?: { uri: string; title: string | null }[];
 }
 
 export interface LLMProvider {
   readonly id: ProviderId;
+  /** Whether generate() supports web-search grounding. */
+  readonly supportsGrounding?: boolean;
   generate(input: ProviderGenerateInput): Promise<ProviderGenerateOutput>;
   embed?(input: { model: string; texts: string[]; dimensions: number }): Promise<number[][]>;
   transcribe?(input: {

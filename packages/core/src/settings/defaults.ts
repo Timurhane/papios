@@ -73,6 +73,14 @@ export const defaultSettings: Settings = {
         day_timezone: 'America/Los_Angeles',
         free_tier: true,
       },
+      // K-8.1: grounding with Google Search, free tier shared ~500/day across Flash models (to be confirmed).
+      gemini_ground: {
+        enabled: true,
+        rpm: 5,
+        rpd: 100,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
       gemini_speak: {
         enabled: true,
         rpm: 3,

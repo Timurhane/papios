@@ -1,4 +1,4 @@
-import type { LLMStore, QueueStore, Settings } from '@papi/core';
+import type { DedupeKeys, LLMStore, QueueStore, Settings } from '@papi/core';
 
 export interface KnowledgeHit {
   id: string;
@@ -27,6 +27,71 @@ export interface UsageSummary {
   errors24h: number;
   queued: number;
   dead: number;
+}
+
+export type CompanyStage =
+  | 'new'
+  | 'analyzing'
+  | 'analyzed'
+  | 'waitlist'
+  | 'in_playbook'
+  | 'replied'
+  | 'meeting'
+  | 'proposal'
+  | 'won'
+  | 'lost'
+  | 'closed';
+
+export type CompanySource =
+  'telegram' | 'csv' | 'osm' | 'grounding' | 'instagram' | 'analysis_tool' | 'manual' | 'places';
+
+export interface CompanyRow {
+  id: string;
+  name: string;
+  name_norm: string;
+  domain: string | null;
+  phone_e164: string | null;
+  website_url: string | null;
+  instagram_handle: string | null;
+  maps_url: string | null;
+  emails: string[];
+  city: string | null;
+  district: string | null;
+  address: string | null;
+  sector: string | null;
+  source: CompanySource;
+  verified: boolean;
+  stage: CompanyStage;
+  score: number | null;
+  score_rationale: string[];
+  next_step_kind: 'playbook' | 'waiting' | 'closed';
+  assigned_playbook: string | null;
+  waiting_reason: string | null;
+  waiting_until: string | null;
+  last_analyzed_at: string | null;
+}
+
+export type NewCompany = Partial<Omit<CompanyRow, 'id'>> &
+  Pick<CompanyRow, 'name' | 'name_norm' | 'source'>;
+
+export interface CompanyPatch extends Partial<Omit<CompanyRow, 'id' | 'source'>> {
+  sector_source?: 'rule' | 'model' | 'manual' | 'source' | null;
+  score_fit?: number;
+  score_pain?: number;
+  score_reach?: number;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export interface AnalysisRecord {
+  companyId: string;
+  kind: 'light' | 'deep';
+  status: 'ok' | 'partial' | 'failed';
+  signals: unknown;
+  pagespeed: unknown;
+  findings: string[];
+  strongestFinding: string | null;
+  error?: string | null;
 }
 
 /** Everything the Worker reads or writes, scoped to one tenant. */
@@ -102,4 +167,35 @@ export interface Repo {
   countAuditSince(since: Date): Promise<Record<string, number>>;
 
   usageSummary(): Promise<UsageSummary>;
+
+  // --- CRM (Phase 2) ---
+  findCompany(keys: DedupeKeys): Promise<CompanyRow | null>;
+  getCompany(id: string): Promise<CompanyRow | null>;
+  createCompany(input: NewCompany): Promise<string>;
+  updateCompany(id: string, patch: CompanyPatch): Promise<void>;
+  addAnalysis(a: AnalysisRecord): Promise<string>;
+  addScore(
+    companyId: string,
+    s: { total: number; fit: number; pain: number; reach: number; rationale: string[] },
+  ): Promise<void>;
+  addCompanyEvent(
+    companyId: string,
+    kind: string,
+    summary: string,
+    data?: Record<string, unknown>,
+  ): Promise<void>;
+  addContact(
+    companyId: string,
+    c: {
+      full_name?: string | null;
+      role?: string | null;
+      email?: string | null;
+      phone_e164?: string | null;
+      is_decision_maker?: boolean;
+      source: string;
+    },
+  ): Promise<void>;
+  addMemory(subjectId: string, kind: 'analysis' | 'note', content: string): Promise<void>;
+  activeSignals(companyId: string): Promise<string[]>;
+  companiesAwaitingAnalysis(limit: number): Promise<CompanyRow[]>;
 }

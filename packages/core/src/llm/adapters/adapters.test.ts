@@ -123,3 +123,25 @@ describe('AnthropicProvider', () => {
     expect(JSON.parse(f.calls[0]!.init.body as string).system).toBe("Sen Papi'sin.");
   });
 });
+
+describe('Gemini grounding', () => {
+  it('adds the google_search tool and returns sources', async () => {
+    const f = fakeFetch(200, {
+      candidates: [
+        {
+          content: { parts: [{ text: 'x' }] },
+          groundingMetadata: {
+            groundingChunks: [{ web: { uri: 'https://a.com', title: 'A' } }, {}],
+          },
+        },
+      ],
+    });
+    const out = await new GeminiProvider('K', f.fn).generate({
+      ...input,
+      json: false,
+      grounding: true,
+    });
+    expect(JSON.parse(f.calls[0]!.init.body as string).tools).toEqual([{ google_search: {} }]);
+    expect(out.sources).toEqual([{ uri: 'https://a.com', title: 'A' }]);
+  });
+});
