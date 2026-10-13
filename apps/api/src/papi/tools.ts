@@ -1,6 +1,6 @@
 import { defineTool, type AgentTool, type LLMService } from '@papi/core';
 import { z } from 'zod';
-import type { Repo } from '../repo/types.ts';
+import type { Repo } from '@papi/server';
 import { searchKnowledge } from './knowledge.ts';
 
 const KNOWLEDGE_KINDS = [

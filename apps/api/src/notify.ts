@@ -1,5 +1,5 @@
 import { decideDelivery, inQuietWindow, splitMessage, type NotificationKind } from '@papi/core';
-import type { Repo } from './repo/types.ts';
+import type { Repo } from '@papi/server';
 import type { TelegramApi } from './telegram/client.ts';
 
 export interface QuietMode {

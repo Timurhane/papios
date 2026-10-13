@@ -5,7 +5,7 @@ import {
   type ProviderGenerateInput,
   type TgUpdate,
 } from '@papi/core';
-import { MemoryRepo } from '../repo/memory.ts';
+import { MemoryRepo } from '@papi/server';
 import type { SendOptions, TelegramApi } from '../telegram/client.ts';
 
 export const OWNER = 4242;

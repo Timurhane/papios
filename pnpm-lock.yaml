@@ -50,9 +50,9 @@ importers:
       '@papi/prompts':
         specifier: workspace:*
         version: link:../../packages/prompts
-      '@supabase/supabase-js':
-        specifier: ^2.117.3
-        version: 2.117.3
+      '@papi/server':
+        specifier: workspace:*
+        version: link:../../packages/server
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -146,6 +146,21 @@ importers:
   packages/modules: {}
 
   packages/prompts: {}
+
+  packages/server:
+    dependencies:
+      '@papi/core':
+        specifier: workspace:*
+        version: link:../core
+      '@papi/prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@supabase/supabase-js':
+        specifier: ^2.117.3
+        version: 2.117.3
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
 packages:
 

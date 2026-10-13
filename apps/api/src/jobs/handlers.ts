@@ -1,7 +1,7 @@
 import { formatApprovalGroup, JobRegistry, type LLMService } from '@papi/core';
 import { approvalRevise } from '@papi/prompts';
 import { notify } from '../notify.ts';
-import type { EmbeddingTable, Repo } from '../repo/types.ts';
+import type { EmbeddingTable, Repo } from '@papi/server';
 import type { TelegramApi } from '../telegram/client.ts';
 
 export interface JobDeps {

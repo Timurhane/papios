@@ -8,8 +8,8 @@ import {
   type ProviderId,
 } from '@papi/core';
 import type { ConfiguredEnv } from './env.ts';
-import { SupabaseRepo } from './repo/supabase.ts';
-import type { Repo } from './repo/types.ts';
+import { SupabaseRepo } from '@papi/server';
+import type { Repo } from '@papi/server';
 import { TelegramClient, type TelegramApi } from './telegram/client.ts';
 
 export interface AppDeps {

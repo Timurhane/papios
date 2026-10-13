@@ -73,7 +73,7 @@ jobs:
               console.log(`export SUPABASE_IT_SERVICE_KEY=${key}`);
             })')"
           test -n "$SUPABASE_IT_SERVICE_KEY"
-          pnpm vitest run --project api src/repo/supabase.integration.test.ts
+          pnpm vitest run --project server src/repo/supabase.integration.test.ts
 
   e2e:
     name: Panel smoke (Playwright)

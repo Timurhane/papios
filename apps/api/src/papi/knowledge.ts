@@ -1,5 +1,5 @@
 import type { LLMService } from '@papi/core';
-import type { KnowledgeHit, Repo } from '../repo/types.ts';
+import type { KnowledgeHit, Repo } from '@papi/server';
 
 /** Rule before model (K-2.3): cheap keyword search first, vector search only if that finds nothing. */
 export async function searchKnowledge(

@@ -16,7 +16,7 @@ import { papiSystem } from '@papi/prompts';
 import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
-import type { ApprovalRow, Repo } from './repo/types.ts';
+import type { ApprovalRow, Repo } from '@papi/server';
 import type { TelegramApi } from './telegram/client.ts';
 
 export interface BotDeps {
