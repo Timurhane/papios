@@ -252,3 +252,25 @@ Panel → Worker: POST /panel/:işlem (Supabase Auth ile doğrulanan aal2 oturum
   secret'ında.
 - Teklif numarası `AJNA-YYYY-NNNN`, kiracı ve yıl başına sayaçla, veritabanında verilir.
 - KDV cevabı olmadan teklif onaya gidemez (veritabanı kısıtı).
+
+## 17. Faz 5: Operasyon
+
+```
+Panel "Kabul edildi (kurulumsuz/kurulumlu)" → closeProposal → app.accept_proposal (kurucu kontenjanı)
+  → Operatör.onClientWon:
+      projects (paket, ödeme yolu, sözleşme sonu, metrics_token)
+      subscriptions + payments (kurulum bedeli, ilk ay) → ödendi → finance_entries (tetikleyiciyle, bir kez)
+      setup_forms (32 bayt anahtar, 30 gün) → form linki mesajı → onay kuyruğu
+      geçici Claude Code promptu + kontrol listesi (project_tasks, project_artifacts)
+      Müşteri Yaşamı (anchor = sözleşme sonu) + Referans dizileri
+Müşteri: GET/POST /kurulum/:anahtar (Turnstile) → app.submit_setup_form (bir kez)
+  → Operatör.onSetupFormSubmitted: papi-config.json + Claude Code promptu + kontrol listesi (şablon, model yok)
+Teslim edilen modül (müşterinin hesabı) → POST /metrics/push (Bearer metrics_token; yalnızca sayılar)
+  → module_metrics → ayın 1'i: aylık rapor taslağı → onay → e-posta
+Cron: 09:05 finance.daily (aylık tahsilatlar + gecikme bildirimi) · ayın 1'i 09:20 client.monthly_report
+```
+
+- `packages/modules`: katalog, kurulum formu alanları, müşteri yapılandırma şeması (zod → `config.schema.json`),
+  Operatör şablonları; her modülde README/SETUP/TESTS; `cevap-asistani/worker` çalışan referans (site kutusu,
+  Instagram DM, kapalı WhatsApp, ilgilenen bildirimi, aylık sayılar).
+- Müşteri verisi (form cevapları, yapılandırma) `client_sensitive`: hiçbir modele gitmez; çıktılar şablonla üretilir.

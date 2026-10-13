@@ -65,9 +65,10 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 5 — Operasyon
 
-- [ ] Projeler, Finans, Notlar
-- [ ] Teslim modülleri, kurulum formu, Claude Code promptu, kontrol listesi; cevap asistanı referans implementasyonu
-- [ ] Müşteri Yaşamı ve Referans playbook'ları, aylık müşteri raporu
+- [x] Projeler, Finans (MRR, tahsilat, gecikme bildirimi, gelir-gider), Notlar
+- [x] Teslim modülleri (5 modül: README, SETUP, TESTS, şema), kurulum formu (müşteri linki), Claude Code promptu, kontrol listesi; cevap asistanı referans implementasyonu
+- [x] Müşteri Yaşamı ve Referans playbook'ları, aylık müşteri raporu (modül sayıları → şablon → onay)
+- [ ] Canlı: kurulum formu ve modül uç noktası (Worker adresi + Turnstile, masaüstü oturumu)
 - [ ] **Kabul:** Kazanıldı işaretlenen firma için proje + kurulum formu + Claude Code promptu oluşuyor
 
 ## Faz 6 — Zeka ve otomasyon
