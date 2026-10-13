@@ -85,6 +85,41 @@ Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
 5. Adrese gir: giriş yap → QR kodu doğrulama uygulamanla okut → 6 haneli kodu gir → panel açılır.
    Bana sonucu yaz (sorun varsa ekran görüntüsü).
 
-## 5–12. İleriki fazlar
+## 5. Google AI Studio (Gemini)
+
+1. https://aistudio.google.com → Google hesabınla gir → **Get API key → Create API key**.
+   **Faturalandırma (billing) açma**; açarsan ücretsiz katmandan çıkılır (K-0.2).
+2. GitHub secret: `GEMINI_API_KEY`.
+3. AI Studio'da **Usage / Rate limits** sayfasındaki model limitlerini bana söyle (ekran görüntüsü yeterli);
+   `settings.llm.quotas` değerlerini gerçek limitlere göre güncelleyeceğim (V-25).
+
+## 6. Groq
+
+1. https://console.groq.com → kayıt → **API Keys → Create API Key**. Kart istenirse dur.
+2. GitHub secret: `GROQ_API_KEY`.
+3. **Settings → Limits** sayfasının ekran görüntüsünü at (Whisper ve sohbet modelleri).
+
+## 7. Telegram botu
+
+1. Telegram'da **@BotFather** → `/newbot` → ad: `Papi`, kullanıcı adı: `..._bot` ile biten benzersiz bir ad.
+2. Verilen token → GitHub secret `TELEGRAM_BOT_TOKEN`.
+3. Kendi kullanıcı kimliğini öğren: **@userinfobot**'a herhangi bir mesaj at, verdiği sayıyı
+   GitHub secret `TELEGRAM_OWNER_ID` olarak ekle.
+4. Rastgele bir webhook şifresi üret (en az 32 karakter; şifre yöneticisinin üreticisi olur) →
+   GitHub secret `TELEGRAM_WEBHOOK_SECRET`.
+
+## 8. Cloudflare Worker (API + Telegram + zamanlayıcı)
+
+1. Cloudflare → sağ üst profil → **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"** şablonu.
+   Hesap: kendi hesabın. Oluşan token → GitHub secret `CLOUDFLARE_API_TOKEN`.
+2. Cloudflare ana sayfasında sağ taraftaki **Account ID** → GitHub secret `CLOUDFLARE_ACCOUNT_ID`.
+3. Supabase → **Project Settings → API Keys**:
+   - Proje adresi `https://rumwebxglpdvssxlhize.supabase.co` → GitHub secret `SUPABASE_URL`
+   - **Secret key** (eski adıyla service_role) → GitHub secret `SUPABASE_SERVICE_ROLE_KEY`.
+     Bu anahtar yalnızca sunucuda kullanılır; panele asla konmaz.
+4. Bana haber ver: **API deploy** iş akışını çalıştırırım. Worker yayınlanır, secret'lar Worker'a aktarılır ve
+   Telegram webhook'u kurulur. Sonra bota sesli not atıp Faz 1 kabul testini birlikte yaparız.
+
+## 9–12. İleriki fazlar
 
 Bu adımlar ilgili faz başlarken tek tek, aynı ayrıntıda verilecek.

@@ -145,10 +145,34 @@ Ayar anahtarları ve biçimleri tek kaynaktan gelir: `packages/core/src/settings
 
 - **Panel:** Cloudflare Pages Git entegrasyonu (V-21). Güvenlik başlıkları `apps/web/public/_headers`.
 - **Veritabanı:** elle tetiklenen `DB deploy` iş akışı (`supabase db push --include-seed`; seed idempotent) (V-22).
-- **Worker:** Faz 1'de (cron + Telegram webhook ile birlikte).
+- **Worker:** elle tetiklenen `API deploy` iş akışı: `wrangler deploy` + secret'ları GitHub'dan Worker'a aktarma + Telegram `setWebhook`.
 
 ## 12. Ücretsiz katmanın tasarıma etkisi
 
 - Workers: cron çağrısı başına 10 ms CPU ve 50 alt istek → dağıtıcı tik başına sınırlı iş alır; ağır iş Actions'ta.
 - Workers: hesap başına 5 cron → tek "her dakika" dağıtıcı + birkaç zamanlanmış tetikleyici; rutinler kuyruk üzerinden.
 - Supabase: 1 hafta hareketsizlikte duraklatma → dakikalık cron projeyi canlı tutar; yedek yok → gece `pg_dump`.
+
+## 13. Faz 1: Telegram turu
+
+```
+Telegram ──POST /telegram/webhook (secret token)──► Worker
+  ├─ sahip değil → audit_log 'telegram.ignored', cevap yok
+  └─ sahip → 200 OK hemen; arka planda (waitUntil):
+       sesli not → getFile → Groq Whisper → metin
+       komut     → kural tabanlı cevap (model yok)
+       metin     → düzeltme bekleniyorsa onaya düzeltme olarak işlenir
+                 → yoksa Papi ajan döngüsü (en fazla 4 adım, JSON araç protokolü)
+                      araçlar: search_knowledge, save_knowledge, list_pending_approvals,
+                               quota_status, set_quiet_mode, queue_lead_link
+       buton     → onay/ret/düzelt (tekil veya toplu), stil hafızasına kayıt
+```
+
+- Bilgi arama önce anahtar kelimeyle (model yok), sonuç yoksa vektörle (gömme kotası harcar).
+- Sessiz mod: `runtime_state.quiet_mode` veya ayardaki otomatik pencere. Sessizde yalnızca sistem hatası ve
+  sıcak cevap gelir; diğerleri `held_notifications`'a yazılır, `/uyandim` özetler.
+- Cron (her dakika): bakım işlerini kuyruğa ekler (15 dk'da bir gömme, günde bir model doğrulama) ve en fazla
+  3 hafif işi çalıştırır. Kota dolu işler deneme hakkı yakılmadan bekletilir.
+- Kod düzeni: saf mantık `packages/core` (llm, agent, queue, telegram); Worker'a özgü olanlar `apps/api`
+  (`bot.ts`, `repo/`, `jobs/`, `telegram/client.ts`). `Repo` arayüzünün bellek içi uygulaması testlerde,
+  Supabase uygulaması canlıda; ikincisi CI'da gerçek PostgREST'e karşı entegrasyon testinden geçer.

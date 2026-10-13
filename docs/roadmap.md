@@ -26,13 +26,14 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 1 — Beyin ve Telegram
 
-- [ ] LLM katmanı: Gemini, Groq, kapalı Anthropic; seviye yönlendirme; rate limiter; önbellek; `llm_calls`
-- [ ] Veri sınıflandırma kuralı (ücretsiz katman gizliliği)
-- [ ] İş kuyruğu + Worker cron
-- [ ] Telegram botu: kimlik beyaz listesi, yazı, sesli not (Whisper), onay butonları, komutlar
-- [ ] Bilgi bankası, firma hafızası, stil hafızası; gömme ve arama
-- [ ] Papi ajan döngüsü ve temel araçlar
-- [ ] **Kabul:** Telegram sesli not → Papi anlıyor, bilgi bankasından cevaplıyor · kota sınırında yedeğe geçiş (testli) · yabancı kullanıcı yok sayılıyor
+- [x] LLM katmanı: Gemini, Groq, kapalı Anthropic; seviye yönlendirme; rate limiter; önbellek; `llm_calls`
+- [x] Veri sınıflandırma kuralı (ücretsiz katman gizliliği)
+- [x] İş kuyruğu + Worker cron
+- [x] Telegram botu: kimlik beyaz listesi, yazı, sesli not (Whisper), onay butonları, komutlar
+- [x] Bilgi bankası, firma hafızası, stil hafızası; gömme ve arama
+- [x] Papi ajan döngüsü ve temel araçlar
+- [x] Hata kaydı (`error_events`), model doğrulama işi, API deploy iş akışı
+- [ ] **Kabul:** Telegram sesli not → Papi anlıyor, bilgi bankasından cevaplıyor (testli; canlı bekliyor) · ✅ kota sınırında yedeğe geçiş (testli) · ✅ yabancı kullanıcı yok sayılıyor (testli; canlı bekliyor)
 
 ## Faz 2 — Aday ve analiz
 
