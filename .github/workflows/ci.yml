@@ -1,9 +1,9 @@
 name: CI
 
+# Every push (any branch) runs CI once; PRs show the result through the commit status,
+# so a separate pull_request trigger would only double the Actions minutes (K-17.8).
 on:
   push:
-    branches: [main]
-  pull_request:
 
 concurrency:
   group: ci-${{ github.ref }}
