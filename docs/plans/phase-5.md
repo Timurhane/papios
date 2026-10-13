@@ -1,6 +1,6 @@
 # Faz 5 planı — Operasyon
 
-Durum: **Onay bekliyor.**
+Durum: **Uygulanıyor** (Timurhan "devam"; C-1 → K-14.4, C-2 → K-14.5).
 Kabul: "Kazanıldı" işaretlenen firma için proje + kurulum formu + Claude Code promptu oluşuyor.
 
 ## Adımlar

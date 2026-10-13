@@ -225,6 +225,16 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 - **K-13.12** (B-1) Teklif PDF'i panelde, tarayıcıda üretilir (pdf-lib + Türkçe destekli gömülü yazı tipi); dosya
   Supabase Storage'a özel olarak yüklenir.
 
+## Faz 5 kararları (2026-10-13, Timurhan "devam" ile önerileri onayladı)
+
+- **K-14.4** (C-1) Kurulum formunu müşteri doldurur: tahmin edilemez anahtarlı link, Turnstile, 30 gün geçerli.
+  Timurhan panelden düzeltebilir. Form cevapları müşteri verisidir (`client_sensitive`); hiçbir modele gitmez,
+  Operatör çıktıları şablonla üretilir.
+- **K-14.5** (C-2) Cevap asistanı referans implementasyonu müşterinin kendi Cloudflare hesabında çalışan bir Worker'dır:
+  site sohbet kutusu ve Instagram DM hazır; WhatsApp Business Cloud API adaptörü yazılı ama kapalı (ücret müşterinin).
+  Yapay zeka müşterinin kendi anahtarıyla; müşterinin müşterilerinin mesajları kişisel veri olduğundan ücretli
+  (eğitimde kullanılmayan) katman önerilir ve README/teklifte yazılır.
+
 ## Açık kararlar (Timurhan onayı bekliyor)
 
 | #   | Konu                                                           | Ne zaman gerekli                              |
