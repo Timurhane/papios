@@ -156,6 +156,17 @@ export const settingsSchemas = {
     /** Public privacy notice the form links to; null shows the built-in notice. */
     privacy_url: z.string().nullable(),
   }),
+  /** Provider free-tier limits shown next to usage (docs/free-tier-limits.md has the sources). */
+  free_limits: z.object({
+    db_mb: z.number().positive(),
+    storage_mb: z.number().positive(),
+    actions_minutes_month: z.number().positive(),
+    /** Fixed monthly Actions minutes of scheduled workflows (heavy jobs every 6 h, nightly backup). */
+    actions_scheduled_minutes: z.number().min(0),
+    /** Typical minutes of one heavy-jobs run (setup + Playwright install). */
+    actions_minutes_per_run: z.number().positive(),
+    workers_requests_day: z.number().positive(),
+  }),
   live_voice: z.object({
     /** K-15.7: daily speaking minutes in the panel. */
     daily_minutes: z.number().int().positive(),

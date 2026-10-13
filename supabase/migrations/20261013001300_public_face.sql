@@ -206,3 +206,45 @@ end;
 $$;
 revoke all on function app.run_retention(uuid, integer) from public;
 grant execute on function app.run_retention(uuid, integer) to service_role;
+
+-- Free-tier usage at a glance (Ölçütler → Sistem sağlığı): sizes and counts only, no data.
+create function app.usage_overview(p_tenant_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  storage_bytes bigint := 0;
+  month_start timestamptz := date_trunc('month', now() at time zone 'Europe/Istanbul') at time zone 'Europe/Istanbul';
+  day_start timestamptz := date_trunc('day', now() at time zone 'Europe/Istanbul') at time zone 'Europe/Istanbul';
+begin
+  if not (app.can_access_tenant(p_tenant_id) or auth.role() = 'service_role') then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  begin
+    execute $q$select coalesce(sum((metadata ->> 'size')::bigint), 0) from storage.objects$q$ into storage_bytes;
+  exception when undefined_column or undefined_table then
+    storage_bytes := 0;
+  end;
+  return jsonb_build_object(
+    'db_bytes', pg_database_size(current_database()),
+    'storage_bytes', storage_bytes,
+    'heavy_runs_month', (select count(distinct locked_by) from public.jobs
+                         where tenant_id = p_tenant_id and heavy and finished_at >= month_start),
+    'heavy_job_seconds_month', (select coalesce(sum(extract(epoch from finished_at - locked_at)), 0)::bigint
+                                from public.jobs
+                                where tenant_id = p_tenant_id and heavy and finished_at >= month_start
+                                  and locked_at is not null),
+    'telegram_messages_today', (select count(*) from public.conversation_messages
+                                where tenant_id = p_tenant_id and role = 'user' and created_at >= day_start),
+    'panel_actions_today', (select count(*) from public.audit_log
+                            where tenant_id = p_tenant_id and action like 'panel.%' and occurred_at >= day_start),
+    'public_requests_today', (select count(*) from public.tool_requests
+                              where tenant_id = p_tenant_id and created_at >= day_start)
+  );
+end;
+$$;
+revoke all on function app.usage_overview(uuid) from public;
+grant execute on function app.usage_overview(uuid) to authenticated, service_role;

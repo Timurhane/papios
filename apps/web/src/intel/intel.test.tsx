@@ -109,6 +109,9 @@ describe('Ölçütler', () => {
     expect(screen.getByText('13 saat')).toBeInTheDocument();
     expect(screen.getByText(/^Örnek Diş Kliniği — 20 Kas 2026/)).toBeInTheDocument();
     expect(screen.getByText('Kota gemini: 40/250 bugün')).toBeInTheDocument();
+    const limits = screen.getByRole('list', { name: 'Ücretsiz limitler' });
+    expect(within(limits).getByText(/42,5 \/ 500 MB · %9/)).toBeInTheDocument();
+    expect(within(limits).getByText('Limite yaklaşıldı.')).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Playbook'), 'sinyal');
     expect(api.metricsCalls.at(-1)).toEqual({ days: 30, playbook: 'sinyal', channel: 'all' });
   });

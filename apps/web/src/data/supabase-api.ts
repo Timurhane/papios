@@ -720,7 +720,10 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
             .lte('contract_end', localDate(new Date(Date.now() + 45 * 86_400_000), TZ))
             .order('contract_end')
             .limit(20),
-          db.from('settings').select('key, value').in('key', ['revenue_target', 'llm']),
+          db
+            .from('settings')
+            .select('key, value')
+            .in('key', ['revenue_target', 'llm', 'free_limits']),
           db
             .from('quota_usage')
             .select('provider, count')
@@ -737,6 +740,7 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
             .limit(1)
             .maybeSingle(),
         ]);
+      const usage = await usageRows(db, cfgOf(must(settings)));
       const sent = must(sentRows) as unknown as { company_id: string; sent_at: string }[];
       const replies = must(replyRows) as unknown as {
         company_id: string | null;
@@ -803,6 +807,7 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
           errors24h: errors,
           oldestApprovalAt: (must(oldest) as { created_at: string } | null)?.created_at ?? null,
         },
+        usage,
         playbooks,
       };
     },
@@ -884,6 +889,68 @@ export function createSupabasePanelApi(db: SupabaseClient, apiUrl: string | null
       };
     },
   };
+}
+
+type SettingRow = { key: string; value: Record<string, unknown> };
+const cfgOf = (rows: unknown) => rows as SettingRow[];
+
+/** Phase 7: free-tier usage next to its limit (estimates where the provider gives no API). */
+async function usageRows(
+  db: SupabaseClient,
+  settings: SettingRow[],
+): Promise<MetricsSummary['usage']> {
+  const lim = (settings.find((r) => r.key === 'free_limits')?.value ?? {}) as Record<
+    string,
+    number
+  >;
+  const tenant = must(
+    await db.from('tenant_members').select('tenant_id').limit(1).maybeSingle(),
+  ) as {
+    tenant_id: string;
+  } | null;
+  if (!tenant) return [];
+  const u = must(
+    await db.schema('app').rpc('usage_overview', { p_tenant_id: tenant.tenant_id }),
+  ) as Record<string, number>;
+  const mb = (b: number) => Math.round((b / 1_048_576) * 10) / 10;
+  const actions = Math.round(
+    (lim.actions_scheduled_minutes ?? 0) +
+      (u.heavy_runs_month ?? 0) * (lim.actions_minutes_per_run ?? 3) +
+      (u.heavy_job_seconds_month ?? 0) / 60,
+  );
+  const workers =
+    1440 +
+    (u.telegram_messages_today ?? 0) +
+    (u.panel_actions_today ?? 0) +
+    (u.public_requests_today ?? 0) * 3;
+  return [
+    {
+      label: 'Supabase veritabanı',
+      used: mb(u.db_bytes ?? 0),
+      limit: lim.db_mb ?? 500,
+      unit: 'MB',
+    },
+    {
+      label: 'Supabase dosya',
+      used: mb(u.storage_bytes ?? 0),
+      limit: lim.storage_mb ?? 1024,
+      unit: 'MB',
+    },
+    {
+      label: 'GitHub Actions (bu ay)',
+      used: actions,
+      limit: lim.actions_minutes_month ?? 2000,
+      unit: 'dk',
+      note: 'tahmin: zamanlanmış işler + ağır iş çalışmaları; CI dakikaları GitHub ayarlarında',
+    },
+    {
+      label: 'Cloudflare Worker istekleri (bugün)',
+      used: workers,
+      limit: lim.workers_requests_day ?? 100_000,
+      unit: 'istek',
+      note: 'tahmin: dakikalık zamanlayıcı + Telegram + panel + herkese açık sayfalar',
+    },
+  ];
 }
 
 /** Adds company names with one extra query (no embedding: companies use a composite key). */

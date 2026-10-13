@@ -145,6 +145,15 @@ export const defaultSettings: Settings = {
     consent_version: '2026-10',
     privacy_url: null,
   },
+  // Verified limits (docs/free-tier-limits.md); scheduled minutes from the workflow budgets (K-3.17)
+  free_limits: {
+    db_mb: 500,
+    storage_mb: 1024,
+    actions_minutes_month: 2000,
+    actions_scheduled_minutes: 430,
+    actions_minutes_per_run: 3,
+    workers_requests_day: 100_000,
+  },
   // K-15.7 (E-3); model id per Gemini Live docs, checked at desktop setup
   live_voice: { daily_minutes: 20, model: 'gemini-live-2.5-flash-preview' },
   // K-13.7

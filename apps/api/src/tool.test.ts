@@ -113,4 +113,11 @@ describe('analysis tool (Worker)', () => {
     const { app } = withTool();
     expect((await app.request(`/analiz/r/${'x'.repeat(43)}`, {}, env)).status).toBe(404);
   });
+
+  it('other public pages cannot be framed and are not sniffed', async () => {
+    const { app } = withTool();
+    const res = await app.request('/demo/unknown', {}, env);
+    expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
 });

@@ -673,6 +673,16 @@ export class FakePanelApi implements PanelApi {
         errors24h: 2,
         oldestApprovalAt: '2026-10-12T08:00:00Z',
       },
+      usage: [
+        { label: 'Supabase veritabanı', used: 42.5, limit: 500, unit: 'MB' },
+        {
+          label: 'GitHub Actions (bu ay)',
+          used: 1850,
+          limit: 2000,
+          unit: 'dk',
+          note: 'tahmin',
+        },
+      ],
       playbooks: ['soguk_ana', 'sinyal'],
     };
   }

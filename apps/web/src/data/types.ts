@@ -402,6 +402,8 @@ export interface MetricsSummary {
     errors24h: number;
     oldestApprovalAt: string | null;
   };
+  /** Free-tier usage next to its limit (Phase 7). */
+  usage: { label: string; used: number; limit: number; unit: string; note?: string }[];
   playbooks: string[];
 }
 

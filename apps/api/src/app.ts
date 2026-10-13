@@ -41,6 +41,18 @@ export function safeEqual(a: string, b: string): boolean {
 export function createApp(opts: AppOptions = {}) {
   const app = new Hono<AppBindings>();
 
+  // K-17.4 hardening: every response gets safe defaults; /analiz sets its own embedding policy.
+  app.use('*', async (c, next) => {
+    await next();
+    const h = c.res.headers;
+    h.set('x-content-type-options', 'nosniff');
+    // origin only (Turnstile widgets need to know which site they are on)
+    if (!h.has('referrer-policy')) h.set('referrer-policy', 'strict-origin-when-cross-origin');
+    if (!h.has('content-security-policy'))
+      h.set('content-security-policy', "frame-ancestors 'none'");
+    h.set('strict-transport-security', 'max-age=31536000');
+  });
+
   app.get('/health', (c) => {
     const env = parseEnv(c.env ?? {});
     return c.json({

@@ -164,6 +164,34 @@ export function MetricsPage() {
               </ul>
             </Card>
           </div>
+
+          <Card className="p-4 sm:p-6">
+            <h2 className="mb-3 font-semibold">Ücretsiz limitler</h2>
+            <ul className="flex flex-col gap-3" aria-label="Ücretsiz limitler">
+              {data.usage.map((u) => {
+                const pct = Math.min(100, Math.round((u.used / u.limit) * 100));
+                return (
+                  <li key={u.label} className="text-sm">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span>{u.label}</span>
+                      <span className="tabular-nums">
+                        {u.used.toLocaleString('tr-TR')} / {u.limit.toLocaleString('tr-TR')}{' '}
+                        {u.unit} · %{pct}
+                      </span>
+                    </div>
+                    <span className="mt-1 block h-2 rounded-full bg-surface-2">
+                      <span
+                        className={`block h-2 rounded-full ${pct >= 80 ? 'bg-red-500' : 'bg-gradient-to-r from-violet to-blue'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </span>
+                    {pct >= 80 && <span className="text-xs text-red-500">Limite yaklaşıldı.</span>}
+                    {u.note && <span className="block text-xs text-muted">{u.note}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         </>
       )}
     </section>

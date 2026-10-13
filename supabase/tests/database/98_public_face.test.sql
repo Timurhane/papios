@@ -1,7 +1,7 @@
 -- Phase 7: analysis tool requests are internal (RLS); public pages reach them only through the Worker.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(19);
 
 insert into public.tool_requests (tenant_id, email, query, consent_at, consent_version, token_hash, expires_at)
 values ('00000000-0000-4000-8000-00000000a1a0', 'a@b.com', 'ornek.com', now(), '2026-10', 'h1', now() + interval '30 days');
@@ -70,6 +70,26 @@ set local request.jwt.claims to '{"sub":"00000000-0000-4000-8000-0000000c11e1","
 select throws_ok($$ select app.delete_company_personal_data('00000000-0000-4000-8000-0000000c0e01') $$, '42501', null,
   'a non-member cannot delete data');
 reset role;
+
+-- Free-tier usage overview
+set local request.jwt.claims to '{"role":"service_role"}';
+select ok((app.usage_overview('00000000-0000-4000-8000-00000000a1a0') ->> 'db_bytes')::bigint > 0,
+  'usage overview reports the database size');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-4000-8000-0000000c11e1","role":"authenticated","aal":"aal1"}';
+select throws_ok($$ select app.usage_overview('00000000-0000-4000-8000-00000000a1a0') $$, '42501', null,
+  'usage overview is for tenant members only');
+select throws_ok($$ select app.run_retention('00000000-0000-4000-8000-00000000a1a0', 12) $$, '42501', null,
+  'retention runs only on the server');
+reset role;
+
+-- Hardening (Phase 7): every table in public has RLS on and anon has no table privileges.
+select is((select count(*)::int from pg_tables where schemaname = 'public' and not rowsecurity), 0,
+  'row level security is enabled on every public table');
+select is((select count(*)::int from information_schema.role_table_grants
+           where grantee = 'anon' and table_schema = 'public'
+             and privilege_type in ('INSERT', 'UPDATE', 'DELETE')), 0,
+  'anon cannot write any public table');
 
 select * from finish();
 rollback;
