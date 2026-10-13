@@ -19,4 +19,5 @@ export { saticiBrief } from './satici/brief.ts';
 export { demoAssistant } from './demo/assistant.ts';
 export { kalemContent } from './kalem/content.ts';
 export { routineParse } from './papi/routine-parse.ts';
+export { papiVoice } from './papi/voice.ts';
 export { intelCompanyNews, intelSectorNews, intelCompetitors } from './intel/news.ts';

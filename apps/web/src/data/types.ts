@@ -340,7 +340,10 @@ export type WorkerAction =
   | 'meeting.brief'
   | 'demo.create'
   | 'routine.parse'
-  | 'routine.save';
+  | 'routine.save'
+  | 'voice.start'
+  | 'voice.tool'
+  | 'voice.end';
 
 // --- Phase 6 ---
 

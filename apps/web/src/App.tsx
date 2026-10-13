@@ -21,6 +21,7 @@ import { MetricsPage } from '@/intel/MetricsPage';
 import { PrintPage } from '@/intel/PrintPage';
 import { RoutinesPage } from '@/intel/RoutinesPage';
 import { TodayPage } from '@/today/TodayPage';
+import { VoicePage } from '@/voice/VoicePage';
 import { ModulePlaceholder } from '@/pages/ModulePlaceholder';
 import { NotFound } from '@/pages/NotFound';
 
@@ -39,6 +40,7 @@ const IMPLEMENTED = new Set([
   '/rutinler',
   '/icerik',
   '/olcutler',
+  '/konus',
 ]);
 
 export function App() {
@@ -65,6 +67,7 @@ export function App() {
           <Route path="/rutinler" element={<RoutinesPage />} />
           <Route path="/icerik" element={<ContentPage />} />
           <Route path="/olcutler" element={<MetricsPage />} />
+          <Route path="/konus" element={<VoicePage />} />
           {panelModules
             .filter((m) => !IMPLEMENTED.has(m.path))
             .map((m) => (

@@ -322,7 +322,16 @@ export function createApp(opts: AppOptions = {}) {
     }
     try {
       const result = await runPanelAction(
-        { ...deps.sales, ...(deps.publicApiUrl ? { publicApiUrl: deps.publicApiUrl } : {}) },
+        {
+          ...deps.sales,
+          ...(deps.publicApiUrl ? { publicApiUrl: deps.publicApiUrl } : {}),
+          voice: {
+            repo: deps.repo,
+            llm: deps.llm,
+            geminiApiKey: env.GEMINI_API_KEY ?? null,
+            ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+          },
+        },
         action,
         body,
       );

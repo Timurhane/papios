@@ -18,6 +18,7 @@ import {
   type SalesDeps,
 } from '@papi/server';
 import { validateRoutine } from '@papi/core';
+import { endVoice, isVoiceTool, runVoiceTool, startVoice, type VoiceDeps } from './voice.ts';
 import { z } from 'zod';
 
 /**
@@ -48,6 +49,16 @@ export const panelActions = {
   'demo.create': z.object({ companyId: uuid }),
   'routine.parse': z.object({ text: z.string().min(3).max(500) }),
   'routine.save': z.object({ spec: z.record(z.string(), z.unknown()) }),
+  'voice.start': z.object({}),
+  'voice.tool': z.object({
+    name: z.string().max(40),
+    args: z.record(z.string(), z.unknown()).default({}),
+  }),
+  'voice.end': z.object({
+    reservedSeconds: z.number().int().min(0).max(3600),
+    usedSeconds: z.number().int().min(0).max(3600),
+    transcript: z.string().max(20_000).default(''),
+  }),
 } as const;
 export type PanelAction = keyof typeof panelActions;
 
@@ -85,7 +96,7 @@ export async function authenticatePanel(
 }
 
 export async function runPanelAction(
-  deps: SalesDeps & { publicApiUrl?: string },
+  deps: SalesDeps & { publicApiUrl?: string; voice?: VoiceDeps },
   action: PanelAction,
   raw: unknown,
 ): Promise<Record<string, unknown>> {
@@ -154,6 +165,23 @@ export async function runPanelAction(
       const spec = validateRoutine(b.spec);
       if (!spec) throw new PanelError('Rutin izinli eylemlerden birine uymuyor');
       return { id: await saveRoutine(deps, spec, 'panel') };
+    }
+    // K-15.7: live voice — token with locked setup, read-only tools run here, usage accounting.
+    case 'voice.start': {
+      panelActions[action].parse(raw);
+      if (!deps.voice) throw new PanelError('Sesli konuşma ayarlı değil', 503);
+      return { ...(await startVoice(deps.voice)) };
+    }
+    case 'voice.tool': {
+      const b = panelActions[action].parse(raw);
+      if (!deps.voice) throw new PanelError('Sesli konuşma ayarlı değil', 503);
+      if (!isVoiceTool(b.name)) throw new PanelError('Bilinmeyen araç');
+      return runVoiceTool(deps.voice, b.name, b.args);
+    }
+    case 'voice.end': {
+      const b = panelActions[action].parse(raw);
+      if (!deps.voice) throw new PanelError('Sesli konuşma ayarlı değil', 503);
+      return endVoice(deps.voice, b.reservedSeconds, b.usedSeconds, b.transcript);
     }
   }
 }
