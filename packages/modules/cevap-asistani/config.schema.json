@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "client": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sector": {
+          "type": ["string", "null"]
+        },
+        "city": {
+          "type": ["string", "null"]
+        },
+        "website": {
+          "type": ["string", "null"]
+        },
+        "instagram": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name", "sector", "city", "website", "instagram"],
+      "additionalProperties": false
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+        }
+      },
+      "required": ["name", "phone", "email"],
+      "additionalProperties": false
+    },
+    "hours": {
+      "type": "string",
+      "minLength": 1
+    },
+    "services": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "faq": {
+      "type": "string"
+    },
+    "tone": {
+      "type": "string",
+      "enum": ["samimi", "resmi", "kisa"]
+    },
+    "booking": {
+      "type": ["string", "null"]
+    },
+    "handoff": {
+      "type": ["string", "null"]
+    },
+    "channels": {
+      "type": "object",
+      "properties": {
+        "web": {
+          "type": "boolean"
+        },
+        "instagram": {
+          "type": "boolean"
+        },
+        "whatsapp": {
+          "type": "boolean"
+        }
+      },
+      "required": ["web", "instagram", "whatsapp"],
+      "additionalProperties": false
+    },
+    "modules": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reminders": {
+      "type": ["string", "null"]
+    },
+    "google_profile": {
+      "type": ["string", "null"]
+    },
+    "software": {
+      "type": ["string", "null"]
+    },
+    "papi": {
+      "type": "object",
+      "properties": {
+        "metrics_url": {
+          "type": ["string", "null"]
+        },
+        "metrics_token": {
+          "type": "string",
+          "minLength": 40
+        }
+      },
+      "required": ["metrics_url", "metrics_token"],
+      "additionalProperties": false
+    },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["gemini", "anthropic", "openai"]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "paid_tier_recommended": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": ["provider", "model", "paid_tier_recommended"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "client",
+    "contact",
+    "hours",
+    "services",
+    "faq",
+    "tone",
+    "booking",
+    "handoff",
+    "channels",
+    "modules",
+    "reminders",
+    "google_profile",
+    "software",
+    "papi",
+    "llm"
+  ],
+  "additionalProperties": false
+}

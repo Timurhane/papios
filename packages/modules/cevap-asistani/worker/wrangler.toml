@@ -1,0 +1,13 @@
+# Müşterinin kendi Cloudflare hesabında yayınlanır (K-7.6). Adı Claude Code kurulumda değiştirir.
+name = "musteri-asistan"
+main = "src/worker.ts"
+compatibility_date = "2026-10-01"
+
+# Aylık sayıları Papi'ye gönderir (her ayın 1'i, 06:00 UTC)
+[triggers]
+crons = ["0 6 1 * *"]
+
+# Aylık sayaçlar (kişisel veri içermez). `wrangler kv namespace create METRICS` ile oluşturup id'yi yazın.
+[[kv_namespaces]]
+binding = "METRICS"
+id = "<kv-namespace-id>"

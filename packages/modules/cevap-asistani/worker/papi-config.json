@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "client": {
+    "name": "Örnek Diş Kliniği",
+    "sector": "Klinik / sağlık",
+    "city": "Balıkesir",
+    "website": "https://ornek.example",
+    "instagram": "ornek"
+  },
+  "contact": {
+    "name": "Örnek Yetkili",
+    "phone": "+90 500 000 00 00",
+    "email": "yetkili@ornek.example"
+  },
+  "hours": "Hafta içi 09:00–19:00, cumartesi 10:00–16:00",
+  "services": ["Diş muayenesi", "İmplant", "Diş beyazlatma"],
+  "faq": "",
+  "tone": "samimi",
+  "booking": "Telefonla ya da bu sohbetten randevu alınır.",
+  "handoff": "Fiyat pazarlığı, şikayetler",
+  "channels": { "web": true, "instagram": true, "whatsapp": false },
+  "modules": ["cevap-asistani", "takip-dizisi", "aylik-rapor"],
+  "reminders": null,
+  "google_profile": null,
+  "software": null,
+  "papi": {
+    "metrics_url": null,
+    "metrics_token": "ORNEK-TOKEN-PAPI-PANELINDEN-INDIRILEN-CONFIG-ILE-DEGISIR"
+  },
+  "llm": { "provider": "gemini", "model": "gemini-flash-latest", "paid_tier_recommended": true }
+}
