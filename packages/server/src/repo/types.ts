@@ -6,7 +6,10 @@ import type {
   LLMStore,
   PlaybookStep,
   QueueStore,
+  RoutineAction,
+  RoutineSchedule,
   Settings,
+  SiteFeatures,
   VatMode,
 } from '@papi/core';
 
@@ -29,7 +32,7 @@ export interface ApprovalRow {
   decided_via?: string | null;
 }
 
-export type EmbeddingTable = 'knowledge_items' | 'memory_items' | 'style_memory';
+export type EmbeddingTable = 'knowledge_items' | 'memory_items' | 'style_memory' | 'notes';
 
 export interface UsageSummary {
   buckets: { bucket: string; used: number; rpd: number | null }[];
@@ -322,6 +325,61 @@ export interface NoteRow {
   created_at: string;
 }
 
+export interface RoutineRow {
+  id: string;
+  code: string;
+  name: string;
+  schedule: RoutineSchedule;
+  action: RoutineAction;
+  params: Record<string, unknown>;
+  enabled: boolean;
+  source: 'preset' | 'telegram' | 'panel';
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_result: string | null;
+}
+
+export interface ContentItemRow {
+  id: string;
+  platform: 'linkedin' | 'x' | 'instagram';
+  week_of: string;
+  topic: string;
+  body: string;
+  status: 'awaiting_approval' | 'approved' | 'posted' | 'rejected';
+  approval_id: string | null;
+}
+
+export interface SuggestionRow {
+  id: string;
+  kind: 'learned_rule' | 'playbook_change';
+  title: string;
+  detail: Record<string, unknown>;
+  status: 'pending' | 'accepted' | 'rejected';
+  approval_id: string | null;
+}
+
+/** What happened since a moment (night shift summary, weekly report). */
+export interface ActivityCounts {
+  newCompanies: number;
+  analyses: number;
+  approvalsCreated: number;
+  signals: number;
+  errors: number;
+  touchesSent: number;
+  replies: number;
+}
+
+/** K-16 numbers for summaries (panel computes its own through RLS). */
+export interface SalesStats {
+  contacted: number;
+  replied: number;
+  positive: number;
+  meetings: number;
+  proposals: number;
+  won: number;
+  pipelineKurus: number;
+}
+
 /** Everything the Worker reads or writes, scoped to one tenant. */
 export interface Repo {
   readonly tenantId: string;
@@ -576,4 +634,72 @@ export interface Repo {
   setupContact(
     projectId: string,
   ): Promise<{ name: string | null; email: string | null; phone: string | null }>;
+
+  // --- Intelligence & automation (Phase 6) ---
+  listRoutines(): Promise<RoutineRow[]>;
+  getRoutine(id: string): Promise<RoutineRow | null>;
+  dueRoutines(now: Date, limit: number): Promise<RoutineRow[]>;
+  createRoutine(
+    r: Pick<RoutineRow, 'code' | 'name' | 'schedule' | 'action' | 'params' | 'source'> & {
+      next_run_at: string;
+    },
+  ): Promise<string>;
+  updateRoutine(id: string, patch: Partial<Omit<RoutineRow, 'id' | 'code'>>): Promise<void>;
+  /** False when the same change was already recorded (fingerprint). */
+  addSignal(s: {
+    companyId: string;
+    kind: string;
+    description: string;
+    fingerprint: string | null;
+    sourceUrl?: string | null;
+  }): Promise<boolean>;
+  siteSnapshot(companyId: string): Promise<SiteFeatures | null>;
+  saveSiteSnapshot(companyId: string, features: SiteFeatures): Promise<void>;
+  /** Companies worth a weekly site rescan: score ≥ min, has a website, not closed; oldest snapshot first. */
+  companiesForSignalScan(minScore: number, limit: number): Promise<CompanyRow[]>;
+  addContentItem(c: Omit<ContentItemRow, 'id' | 'status' | 'approval_id'>): Promise<string>;
+  updateContentItem(
+    id: string,
+    patch: Partial<Pick<ContentItemRow, 'status' | 'approval_id' | 'body'>> & {
+      posted_at?: string;
+    },
+  ): Promise<void>;
+  contentByApproval(approvalId: string): Promise<ContentItemRow | null>;
+  /** Null when an identical suggestion exists already (fingerprint). */
+  addSuggestion(s: {
+    kind: SuggestionRow['kind'];
+    title: string;
+    detail: Record<string, unknown>;
+    fingerprint: string;
+  }): Promise<string | null>;
+  updateSuggestion(
+    id: string,
+    patch: Partial<Pick<SuggestionRow, 'status' | 'approval_id'>>,
+  ): Promise<void>;
+  suggestionByApproval(approvalId: string): Promise<SuggestionRow | null>;
+  /** Approval ids of content items and suggestions still waiting for a decision to be applied. */
+  automationApprovalsAwaiting(limit: number): Promise<string[]>;
+  /** Timurhan's correction instructions from style memory (K-6.8). */
+  correctionInstructions(sinceDays: number): Promise<string[]>;
+  stepStats(): Promise<
+    { playbook: string; position: number; angle: string; sent: number; replies: number }[]
+  >;
+  addToneRule(rule: string): Promise<void>;
+  activitySince(since: Date): Promise<ActivityCounts>;
+  salesStats(sinceDays: number): Promise<SalesStats>;
+  /** Open leads by score (hot lead digest, night shift). */
+  topCompanies(minScore: number, limit: number): Promise<CompanyRow[]>;
+  companiesNeedingGeocode(limit: number): Promise<CompanyRow[]>;
+  setCompanyLocation(id: string, lat: number | null, lng: number | null): Promise<void>;
+  geocodeCached(
+    query: string,
+  ): Promise<{ lat: number | null; lng: number | null; found: boolean } | null>;
+  cacheGeocode(
+    query: string,
+    r: { lat: number | null; lng: number | null; found: boolean },
+  ): Promise<void>;
+  searchNotesByVector(
+    embedding: number[],
+    limit: number,
+  ): Promise<{ id: string; body: string; created_at: string; score: number }[]>;
 }

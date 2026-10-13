@@ -110,3 +110,20 @@ create table app.geocode_cache (
 alter table app.geocode_cache enable row level security;
 revoke all on app.geocode_cache from anon, authenticated;
 grant select, insert, update on app.geocode_cache to service_role;
+
+-- V-66 → Phase 6: notes are embedded from redacted text (K-4.9) and searchable by meaning.
+create function app.match_notes(p_tenant_id uuid, p_embedding extensions.vector, p_limit integer default 5)
+returns table (id uuid, body text, created_at timestamptz, similarity double precision)
+language sql
+stable
+set search_path = ''
+as $$
+  select n.id, n.body, n.created_at, 1 - (n.embedding operator(extensions.<=>) p_embedding) as similarity
+  from public.notes n
+  where n.tenant_id = p_tenant_id and n.embedding is not null
+    and (auth.role() = 'service_role' or app.can_access_tenant(p_tenant_id))
+  order by n.embedding operator(extensions.<=>) p_embedding
+  limit least(p_limit, 20);
+$$;
+revoke all on function app.match_notes(uuid, extensions.vector, integer) from public;
+grant execute on function app.match_notes(uuid, extensions.vector, integer) to authenticated, service_role;

@@ -9,14 +9,20 @@ import {
   type QueueStore,
   type FounderTerms,
   type Settings,
+  type SiteFeatures,
 } from '@papi/core';
 import type { DedupeKeys } from '@papi/core';
 import type {
   AnalysisRecord,
   ApprovalRow,
   CompanyPatch,
+  ActivityCounts,
   CompanyRow,
+  ContentItemRow,
   DemoRow,
+  RoutineRow,
+  SalesStats,
+  SuggestionRow,
   DemoTouch,
   EmbeddingTable,
   InboxRow,
@@ -46,6 +52,9 @@ const TOUCH_COLUMNS =
 const STEP_COLUMNS =
   'position, day_offset, anchor, repeat_every_days, channel, angle, conditions, requires_approval, approval_exempt_kind';
 
+type CountQuery = ReturnType<ReturnType<SupabaseClient['from']>['select']>;
+const ROUTINE_COLUMNS =
+  'id, code, name, schedule, action, params, enabled, source, next_run_at, last_run_at, last_result';
 const MEETING_COLUMNS =
   'id, company_id, status, proposed_slots, starts_at, duration_minutes, calendar_event_id, notes_raw, notes, source';
 const PROPOSAL_COLUMNS =
@@ -85,6 +94,7 @@ const EMBED_TEXT: Record<EmbeddingTable, string> = {
   knowledge_items: 'title, content',
   memory_items: 'content',
   style_memory: 'original, revised, instruction',
+  notes: 'body',
 };
 
 export class SupabaseRepo implements Repo {
@@ -1846,5 +1856,433 @@ export class SupabaseRepo implements Repo {
     const a = (form?.answers ?? {}) as Record<string, unknown>;
     const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
     return { name: str(a.contact_name), email: str(a.contact_email), phone: str(a.contact_phone) };
+  }
+
+  // --- intelligence & automation -----------------------------------------------------------------
+
+  async listRoutines() {
+    return must(
+      await this.db
+        .from('routines')
+        .select(ROUTINE_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .order('name'),
+      'routines',
+    ) as RoutineRow[];
+  }
+
+  async getRoutine(id: string) {
+    return must(
+      await this.db
+        .from('routines')
+        .select(ROUTINE_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id)
+        .maybeSingle(),
+      'routine',
+    ) as RoutineRow | null;
+  }
+
+  async dueRoutines(now: Date, limit: number) {
+    return must(
+      await this.db
+        .from('routines')
+        .select(ROUTINE_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .eq('enabled', true)
+        .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
+        .order('next_run_at', { ascending: true, nullsFirst: true })
+        .limit(limit),
+      'due routines',
+    ) as RoutineRow[];
+  }
+
+  async createRoutine(
+    r: Pick<RoutineRow, 'code' | 'name' | 'schedule' | 'action' | 'params' | 'source'> & {
+      next_run_at: string;
+    },
+  ) {
+    return (
+      must(
+        await this.db
+          .from('routines')
+          .insert({ ...r, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'create routine',
+      ) as { id: string }
+    ).id;
+  }
+
+  async updateRoutine(id: string, patch: Partial<Omit<RoutineRow, 'id' | 'code'>>) {
+    must(
+      await this.db.from('routines').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update routine',
+    );
+  }
+
+  async addSignal(sig: {
+    companyId: string;
+    kind: string;
+    description: string;
+    fingerprint: string | null;
+    sourceUrl?: string | null;
+  }) {
+    const res = await this.db.from('signals').insert({
+      tenant_id: this.tenantId,
+      company_id: sig.companyId,
+      kind: sig.kind,
+      description: sig.description,
+      fingerprint: sig.fingerprint,
+      source_url: sig.sourceUrl ?? null,
+    });
+    if (res.error?.code === '23505') return false;
+    must(res, 'add signal');
+    return true;
+  }
+
+  async siteSnapshot(companyId: string) {
+    const r = must(
+      await this.db
+        .from('site_snapshots')
+        .select('features')
+        .eq('tenant_id', this.tenantId)
+        .eq('company_id', companyId)
+        .maybeSingle(),
+      'site snapshot',
+    ) as { features: SiteFeatures } | null;
+    return r?.features ?? null;
+  }
+
+  async saveSiteSnapshot(companyId: string, features: SiteFeatures) {
+    must(
+      await this.db.from('site_snapshots').upsert(
+        {
+          tenant_id: this.tenantId,
+          company_id: companyId,
+          features,
+          fetched_at: new Date().toISOString(),
+        },
+        { onConflict: 'tenant_id,company_id' },
+      ),
+      'save snapshot',
+    );
+  }
+
+  async companiesForSignalScan(minScore: number, limit: number) {
+    const rows = must(
+      await this.db
+        .from('companies')
+        .select(`${COMPANY_COLUMNS}, site_snapshots(fetched_at)`)
+        .eq('tenant_id', this.tenantId)
+        .gte('score', minScore)
+        .not('website_url', 'is', null)
+        .not('stage', 'in', '(won,lost,closed)')
+        .limit(500),
+      'companies for signal scan',
+    ) as unknown as (CompanyRow & {
+      site_snapshots: { fetched_at: string }[] | { fetched_at: string } | null;
+    })[];
+    const seen = (r: (typeof rows)[number]) => {
+      const s = Array.isArray(r.site_snapshots) ? r.site_snapshots[0] : r.site_snapshots;
+      return s?.fetched_at ?? '';
+    };
+    return rows
+      .sort((a, b) => seen(a).localeCompare(seen(b)))
+      .slice(0, limit)
+      .map(({ site_snapshots: _s, ...c }) => c as CompanyRow);
+  }
+
+  async addContentItem(c: Omit<ContentItemRow, 'id' | 'status' | 'approval_id'>) {
+    return (
+      must(
+        await this.db
+          .from('content_items')
+          .insert({ ...c, tenant_id: this.tenantId })
+          .select('id')
+          .single(),
+        'add content',
+      ) as { id: string }
+    ).id;
+  }
+
+  async updateContentItem(
+    id: string,
+    patch: Partial<Pick<ContentItemRow, 'status' | 'approval_id' | 'body'>> & {
+      posted_at?: string;
+    },
+  ) {
+    must(
+      await this.db.from('content_items').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update content',
+    );
+  }
+
+  async contentByApproval(approvalId: string) {
+    return must(
+      await this.db
+        .from('content_items')
+        .select('id, platform, week_of, topic, body, status, approval_id')
+        .eq('tenant_id', this.tenantId)
+        .eq('approval_id', approvalId)
+        .maybeSingle(),
+      'content by approval',
+    ) as ContentItemRow | null;
+  }
+
+  async addSuggestion(sg: {
+    kind: SuggestionRow['kind'];
+    title: string;
+    detail: Record<string, unknown>;
+    fingerprint: string;
+  }) {
+    const res = await this.db
+      .from('suggestions')
+      .insert({ ...sg, tenant_id: this.tenantId })
+      .select('id')
+      .single();
+    if (res.error?.code === '23505') return null;
+    return (must(res, 'add suggestion') as { id: string }).id;
+  }
+
+  async updateSuggestion(
+    id: string,
+    patch: Partial<Pick<SuggestionRow, 'status' | 'approval_id'>>,
+  ) {
+    must(
+      await this.db.from('suggestions').update(patch).eq('tenant_id', this.tenantId).eq('id', id),
+      'update suggestion',
+    );
+  }
+
+  async suggestionByApproval(approvalId: string) {
+    return must(
+      await this.db
+        .from('suggestions')
+        .select('id, kind, title, detail, status, approval_id')
+        .eq('tenant_id', this.tenantId)
+        .eq('approval_id', approvalId)
+        .maybeSingle(),
+      'suggestion by approval',
+    ) as SuggestionRow | null;
+  }
+
+  async automationApprovalsAwaiting(limit: number) {
+    const [content, sugg] = await Promise.all([
+      this.db
+        .from('content_items')
+        .select('approval_id')
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'awaiting_approval')
+        .not('approval_id', 'is', null)
+        .limit(limit),
+      this.db
+        .from('suggestions')
+        .select('approval_id')
+        .eq('tenant_id', this.tenantId)
+        .eq('status', 'pending')
+        .not('approval_id', 'is', null)
+        .limit(limit),
+    ]);
+    return [
+      ...(must(content, 'content awaiting') as { approval_id: string }[]),
+      ...(must(sugg, 'suggestions awaiting') as { approval_id: string }[]),
+    ].map((r) => r.approval_id);
+  }
+
+  async correctionInstructions(sinceDays: number) {
+    const rows = must(
+      await this.db
+        .from('style_memory')
+        .select('instruction')
+        .eq('tenant_id', this.tenantId)
+        .not('instruction', 'is', null)
+        .gte('created_at', new Date(Date.now() - sinceDays * 86_400_000).toISOString())
+        .limit(500),
+      'corrections',
+    ) as { instruction: string }[];
+    return rows.map((r) => r.instruction);
+  }
+
+  async stepStats() {
+    const [stats, playbooks] = await Promise.all([
+      this.db
+        .from('playbook_step_stats')
+        .select('playbook_id, position, angle, sent, replies')
+        .eq('tenant_id', this.tenantId),
+      this.db.from('playbooks').select('id, name').eq('tenant_id', this.tenantId),
+    ]);
+    const names = new Map(
+      (must(playbooks, 'playbooks') as { id: string; name: string }[]).map((p) => [p.id, p.name]),
+    );
+    return (
+      must(stats, 'step stats') as {
+        playbook_id: string;
+        position: number;
+        angle: string;
+        sent: number;
+        replies: number;
+      }[]
+    ).map((r) => ({
+      playbook: names.get(r.playbook_id) ?? '',
+      position: r.position,
+      angle: r.angle,
+      sent: r.sent,
+      replies: r.replies,
+    }));
+  }
+
+  async addToneRule(rule: string) {
+    const tone = await this.toneProfile();
+    if (tone.donts.includes(rule)) return;
+    must(
+      await this.db
+        .from('tone_profiles')
+        .update({ donts: [...tone.donts, rule] })
+        .eq('tenant_id', this.tenantId),
+      'add tone rule',
+    );
+  }
+
+  private async countSince(
+    table: string,
+    column: string,
+    since: Date,
+    filter?: (q: CountQuery) => CountQuery,
+  ) {
+    let q = this.db
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', this.tenantId)
+      .gte(column, since.toISOString());
+    if (filter) q = filter(q);
+    const res = await q;
+    if (res.error) throw new Error(`count ${table}: ${res.error.message}`);
+    return res.count ?? 0;
+  }
+
+  async activitySince(since: Date): Promise<ActivityCounts> {
+    const [newCompanies, analyses, approvalsCreated, signals, errors, touchesSent, replies] =
+      await Promise.all([
+        this.countSince('companies', 'created_at', since),
+        this.countSince('analyses', 'created_at', since),
+        this.countSince('approvals', 'created_at', since),
+        this.countSince('signals', 'detected_at', since),
+        this.countSince('error_events', 'created_at', since),
+        this.countSince('touches', 'sent_at', since, (q) => q.eq('status', 'sent')),
+        this.countSince('inbox_messages', 'received_at', since, (q) =>
+          q.neq('classification', 'auto_reply'),
+        ),
+      ]);
+    return { newCompanies, analyses, approvalsCreated, signals, errors, touchesSent, replies };
+  }
+
+  async salesStats(sinceDays: number): Promise<SalesStats> {
+    const since = new Date(Date.now() - sinceDays * 86_400_000);
+    const [contacted, replied, positive, meetings, proposals, won, pipeline] = await Promise.all([
+      this.countSince('touches', 'sent_at', since, (q) => q.eq('status', 'sent')),
+      this.countSince('inbox_messages', 'received_at', since, (q) =>
+        q.neq('classification', 'auto_reply'),
+      ),
+      this.countSince('inbox_messages', 'received_at', since, (q) =>
+        q.in('classification', ['interested', 'question']),
+      ),
+      this.countSince('meetings', 'created_at', since, (q) =>
+        q.in('status', ['scheduled', 'done']),
+      ),
+      this.countSince('proposals', 'sent_at', since),
+      this.countSince('proposals', 'decided_at', since, (q) => q.eq('status', 'accepted')),
+      this.db
+        .from('proposals')
+        .select('monthly_kurus, quote')
+        .eq('tenant_id', this.tenantId)
+        .in('status', ['approved', 'sent']),
+    ]);
+    const pipelineKurus = (
+      must(pipeline, 'pipeline') as {
+        monthly_kurus: number | string | null;
+        quote: { project?: { projectKurus?: number } };
+      }[]
+    ).reduce(
+      (n, r) =>
+        n + (r.monthly_kurus ? Number(r.monthly_kurus) : (r.quote.project?.projectKurus ?? 0)),
+      0,
+    );
+    return { contacted, replied, positive, meetings, proposals, won, pipelineKurus };
+  }
+
+  async topCompanies(minScore: number, limit: number) {
+    return must(
+      await this.db
+        .from('companies')
+        .select(COMPANY_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .gte('score', minScore)
+        .in('stage', ['analyzed', 'in_playbook', 'replied', 'meeting'])
+        .order('score', { ascending: false })
+        .limit(limit),
+      'top companies',
+    ) as CompanyRow[];
+  }
+
+  async companiesNeedingGeocode(limit: number) {
+    return must(
+      await this.db
+        .from('companies')
+        .select(COMPANY_COLUMNS)
+        .eq('tenant_id', this.tenantId)
+        .is('lat', null)
+        .not('address', 'is', null)
+        .limit(limit),
+      'companies to geocode',
+    ) as CompanyRow[];
+  }
+
+  async setCompanyLocation(id: string, lat: number | null, lng: number | null) {
+    must(
+      await this.db
+        .from('companies')
+        .update({ lat, lng })
+        .eq('tenant_id', this.tenantId)
+        .eq('id', id),
+      'set location',
+    );
+  }
+
+  async geocodeCached(query: string) {
+    return must(
+      await this.app()
+        .from('geocode_cache')
+        .select('lat, lng, found')
+        .eq('query', query)
+        .maybeSingle(),
+      'geocode cache',
+    ) as { lat: number | null; lng: number | null; found: boolean } | null;
+  }
+
+  async cacheGeocode(query: string, r: { lat: number | null; lng: number | null; found: boolean }) {
+    must(
+      await this.app()
+        .from('geocode_cache')
+        .upsert({ query, ...r }),
+      'cache geocode',
+    );
+  }
+
+  async searchNotesByVector(embedding: number[], limit: number) {
+    const rows = must(
+      await this.app().rpc('match_notes', {
+        p_tenant_id: this.tenantId,
+        p_embedding: vec(embedding),
+        p_limit: limit,
+      }),
+      'match notes',
+    ) as { id: string; body: string; created_at: string; similarity: number }[];
+    return rows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      created_at: r.created_at,
+      score: r.similarity,
+    }));
   }
 }

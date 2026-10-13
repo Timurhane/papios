@@ -810,11 +810,8 @@ export async function processInbound(deps: OutreachDeps, mails: InboundMail[]): 
         waiting_until: today,
       });
       // Satıcı drafts an answer (redacted input, K-4.9); it arrives in the approval queue.
-      await deps.repo.enqueue(
-        'satici.reply_draft',
-        { inboxId: stored },
-        { unique: true, priority: 5 },
-      );
+      // not `unique`: uniqueness is per job type, and every reply needs its own draft
+      await deps.repo.enqueue('satici.reply_draft', { inboxId: stored }, { priority: 5 });
       const excerpt = stripQuoted(m.body).slice(0, 400);
       await deps.notify?.(
         'hot_reply',

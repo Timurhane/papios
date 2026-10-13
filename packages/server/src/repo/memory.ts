@@ -6,16 +6,19 @@ import {
   normalizePhone,
   type DedupeKeys,
   type FounderTerms,
+  type SiteFeatures,
   type Job,
   type PlaybookStep,
   type QueueStore,
   type Settings,
 } from '@papi/core';
 import type {
+  ActivityCounts,
   AnalysisRecord,
   ApprovalRow,
   CompanyPatch,
   CompanyRow,
+  ContentItemRow,
   DemoRow,
   DemoTouch,
   EmbeddingTable,
@@ -35,6 +38,9 @@ import type {
   ProposalRow,
   ProposalStatus,
   Repo,
+  RoutineRow,
+  SalesStats,
+  SuggestionRow,
   ServicePackage,
   TouchRow,
   TouchStatus,
@@ -1115,6 +1121,196 @@ export class MemoryRepo implements Repo {
     >;
     const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
     return { name: str(a.contact_name), email: str(a.contact_email), phone: str(a.contact_phone) };
+  }
+
+  // --- intelligence & automation ---
+  routines: RoutineRow[] = [];
+  signalRows: {
+    companyId: string;
+    kind: string;
+    description: string;
+    fingerprint: string | null;
+  }[] = [];
+  snapshots = new Map<string, SiteFeatures>();
+  contentItems: ContentItemRow[] = [];
+  suggestions: (SuggestionRow & { fingerprint: string })[] = [];
+  geocache = new Map<string, { lat: number | null; lng: number | null; found: boolean }>();
+  locations = new Map<string, { lat: number | null; lng: number | null }>();
+  activity: ActivityCounts = {
+    newCompanies: 0,
+    analyses: 0,
+    approvalsCreated: 0,
+    signals: 0,
+    errors: 0,
+    touchesSent: 0,
+    replies: 0,
+  };
+  stats: SalesStats = {
+    contacted: 0,
+    replied: 0,
+    positive: 0,
+    meetings: 0,
+    proposals: 0,
+    won: 0,
+    pipelineKurus: 0,
+  };
+  steps: { playbook: string; position: number; angle: string; sent: number; replies: number }[] =
+    [];
+  noteVectors: { id: string; body: string; created_at: string; score: number }[] = [];
+
+  async listRoutines() {
+    return this.routines;
+  }
+  async getRoutine(id: string) {
+    return this.routines.find((r) => r.id === id) ?? null;
+  }
+  async dueRoutines(now: Date, limit: number) {
+    return this.routines
+      .filter((r) => r.enabled && (!r.next_run_at || Date.parse(r.next_run_at) <= now.getTime()))
+      .slice(0, limit);
+  }
+  async createRoutine(
+    r: Pick<RoutineRow, 'code' | 'name' | 'schedule' | 'action' | 'params' | 'source'> & {
+      next_run_at: string;
+    },
+  ) {
+    const id = this.id();
+    this.routines.push({ ...r, id, enabled: true, last_run_at: null, last_result: null });
+    return id;
+  }
+  async updateRoutine(id: string, patch: Partial<Omit<RoutineRow, 'id' | 'code'>>) {
+    const r = this.routines.find((x) => x.id === id);
+    if (r) Object.assign(r, patch);
+  }
+  async addSignal(sig: {
+    companyId: string;
+    kind: string;
+    description: string;
+    fingerprint: string | null;
+  }) {
+    if (
+      sig.fingerprint &&
+      this.signalRows.some(
+        (x) => x.companyId === sig.companyId && x.fingerprint === sig.fingerprint,
+      )
+    )
+      return false;
+    this.signalRows.push({
+      companyId: sig.companyId,
+      kind: sig.kind,
+      description: sig.description,
+      fingerprint: sig.fingerprint,
+    });
+    return true;
+  }
+  async siteSnapshot(companyId: string) {
+    return this.snapshots.get(companyId) ?? null;
+  }
+  async saveSiteSnapshot(companyId: string, features: SiteFeatures) {
+    this.snapshots.set(companyId, features);
+  }
+  async companiesForSignalScan(minScore: number, limit: number) {
+    return this.companies
+      .filter(
+        (c) =>
+          (c.score ?? 0) >= minScore &&
+          c.website_url &&
+          !['won', 'lost', 'closed'].includes(c.stage),
+      )
+      .slice(0, limit);
+  }
+  async addContentItem(c: Omit<ContentItemRow, 'id' | 'status' | 'approval_id'>) {
+    const id = this.id();
+    this.contentItems.push({ ...c, id, status: 'awaiting_approval', approval_id: null });
+    return id;
+  }
+  async updateContentItem(
+    id: string,
+    patch: Partial<Pick<ContentItemRow, 'status' | 'approval_id' | 'body'>> & {
+      posted_at?: string;
+    },
+  ) {
+    const c = this.contentItems.find((x) => x.id === id);
+    if (c) {
+      const { posted_at: _p, ...rest } = patch;
+      Object.assign(c, rest);
+    }
+  }
+  async contentByApproval(approvalId: string) {
+    return this.contentItems.find((c) => c.approval_id === approvalId) ?? null;
+  }
+  async addSuggestion(sg: {
+    kind: SuggestionRow['kind'];
+    title: string;
+    detail: Record<string, unknown>;
+    fingerprint: string;
+  }) {
+    if (this.suggestions.some((x) => x.fingerprint === sg.fingerprint)) return null;
+    const id = this.id();
+    this.suggestions.push({ ...sg, id, status: 'pending', approval_id: null });
+    return id;
+  }
+  async updateSuggestion(
+    id: string,
+    patch: Partial<Pick<SuggestionRow, 'status' | 'approval_id'>>,
+  ) {
+    const x = this.suggestions.find((y) => y.id === id);
+    if (x) Object.assign(x, patch);
+  }
+  async suggestionByApproval(approvalId: string) {
+    return this.suggestions.find((x) => x.approval_id === approvalId) ?? null;
+  }
+  async automationApprovalsAwaiting(limit: number) {
+    return [
+      ...this.contentItems
+        .filter((c) => c.status === 'awaiting_approval' && c.approval_id)
+        .map((c) => c.approval_id as string),
+      ...this.suggestions
+        .filter((x) => x.status === 'pending' && x.approval_id)
+        .map((x) => x.approval_id as string),
+    ].slice(0, limit);
+  }
+  async correctionInstructions() {
+    return (this.styleMemory as { instruction?: string | null }[])
+      .map((m) => m.instruction)
+      .filter((x): x is string => !!x);
+  }
+  async stepStats() {
+    return this.steps;
+  }
+  async addToneRule(rule: string) {
+    if (!this.tone.donts.includes(rule)) this.tone.donts.push(rule);
+  }
+  async activitySince() {
+    return this.activity;
+  }
+  async salesStats() {
+    return this.stats;
+  }
+  async topCompanies(minScore: number, limit: number) {
+    return this.companies
+      .filter(
+        (c) =>
+          (c.score ?? 0) >= minScore &&
+          ['analyzed', 'in_playbook', 'replied', 'meeting'].includes(c.stage),
+      )
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, limit);
+  }
+  async companiesNeedingGeocode(limit: number) {
+    return this.companies.filter((c) => c.address && !this.locations.has(c.id)).slice(0, limit);
+  }
+  async setCompanyLocation(id: string, lat: number | null, lng: number | null) {
+    this.locations.set(id, { lat, lng });
+  }
+  async geocodeCached(query: string) {
+    return this.geocache.get(query) ?? null;
+  }
+  async cacheGeocode(query: string, r: { lat: number | null; lng: number | null; found: boolean }) {
+    this.geocache.set(query, r);
+  }
+  async searchNotesByVector(_e: number[], limit: number) {
+    return this.noteVectors.slice(0, limit);
   }
 }
 
