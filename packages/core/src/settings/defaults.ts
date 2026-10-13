@@ -34,19 +34,60 @@ export const defaultSettings: Settings = {
     { name: 'Marmara', priority: 2 },
     { name: 'Türkiye', priority: 3 },
   ],
-  // K-4.3, K-4.4: model ids and limits are filled in Phase 1 after verifying provider docs
+  // K-4.3, K-4.4. Model aliases and conservative limits are assumption V-25: confirm against the
+  // AI Studio / Groq console quota pages during live setup.
   llm: {
     routing: {
-      light: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
-      medium: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
-      heavy: { provider: 'gemini', model: null, fallback: { provider: 'groq', model: null } },
+      light: {
+        provider: 'gemini',
+        model: 'gemini-flash-lite-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      },
+      medium: {
+        provider: 'gemini',
+        model: 'gemini-flash-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-120b' },
+      },
+      heavy: {
+        provider: 'gemini',
+        model: 'gemini-flash-latest',
+        fallback: { provider: 'groq', model: 'openai/gpt-oss-120b' },
+      },
     },
+    embedding: { provider: 'gemini', model: 'gemini-embedding-001', dimensions: 768 },
+    transcription: { provider: 'groq', model: 'whisper-large-v3-turbo', language: 'tr' },
+    // V-26: Gemini TTS needs no extra account; off until a model id is set.
+    speech: { provider: 'gemini', model: null, voice: null },
     quotas: {
-      gemini: { enabled: true, rpm: null, rpd: null, free_tier: true },
-      groq: { enabled: true, rpm: null, rpd: null, free_tier: true },
-      anthropic: { enabled: false, rpm: null, rpd: null, free_tier: false },
+      gemini: {
+        enabled: true,
+        rpm: 10,
+        rpd: 250,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      gemini_embed: {
+        enabled: true,
+        rpm: 60,
+        rpd: 800,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      gemini_speak: {
+        enabled: true,
+        rpm: 3,
+        rpd: 15,
+        day_timezone: 'America/Los_Angeles',
+        free_tier: true,
+      },
+      groq: { enabled: true, rpm: 20, rpd: 1000, day_timezone: 'UTC', free_tier: true },
+      groq_transcribe: { enabled: true, rpm: 15, rpd: 1500, day_timezone: 'UTC', free_tier: true },
+      anthropic: { enabled: false, rpm: null, rpd: null, day_timezone: 'UTC', free_tier: false },
     },
+    cache_ttl_days: 30,
+    max_agent_steps: 4,
   },
+  telegram: { voice_replies: false, approvals_per_message: 8 },
   // K-15.5
   night_shift: { auto_window: null, urgent_as_silent: true },
   // K-15.4

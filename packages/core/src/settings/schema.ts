@@ -7,22 +7,27 @@ const kurus = z.number().int().nonnegative();
 export const llmProviderSchema = z.enum(['gemini', 'groq', 'anthropic']);
 export const llmTierSchema = z.enum(['light', 'medium', 'heavy']);
 
-const tierRoute = z.object({
+const modelRef = z.object({
   provider: llmProviderSchema,
-  /** Model id; null until verified against provider docs (Phase 1). */
+  /** Provider model id. Aliases such as `gemini-flash-latest` are preferred over pinned versions. */
   model: z.string().min(1).nullable(),
-  fallback: z
-    .object({ provider: llmProviderSchema, model: z.string().min(1).nullable() })
-    .nullable(),
 });
 
-const providerQuota = z.object({
+const tierRoute = modelRef.extend({ fallback: modelRef.nullable() });
+
+/**
+ * Quota bucket. Buckets are named `<provider>` for text generation and `<provider>_<op>` for other
+ * operations (e.g. `gemini_embed`, `groq_transcribe`) because providers meter them separately.
+ */
+const quotaBucket = z.object({
   enabled: z.boolean(),
-  /** Requests per minute; null = not configured yet (calls are blocked until set). */
+  /** Requests per minute; null = not configured yet (calls are refused until set). */
   rpm: z.number().int().positive().nullable(),
   /** Requests per day; null = not configured yet. */
   rpd: z.number().int().positive().nullable(),
-  /** Free tier: provider may train on inputs, so personal/client data must never be sent. */
+  /** IANA zone in which the provider resets its daily quota. */
+  day_timezone: z.string().min(1),
+  /** Free tier: provider may use inputs to improve products, so personal/client data is never sent. */
   free_tier: z.boolean(),
 });
 
@@ -70,7 +75,19 @@ export const settingsSchemas = {
   ),
   llm: z.object({
     routing: z.record(llmTierSchema, tierRoute),
-    quotas: z.record(llmProviderSchema, providerQuota),
+    embedding: modelRef.extend({ dimensions: z.number().int().positive() }),
+    transcription: modelRef.extend({ language: z.string().min(2) }),
+    speech: modelRef.extend({ voice: z.string().min(1).nullable() }),
+    quotas: z.record(z.string().regex(/^[a-z]+(_[a-z]+)?$/), quotaBucket),
+    cache_ttl_days: z.number().int().positive(),
+    /** Agent loop step limit; keeps a Telegram turn inside Workers' subrequest budget. */
+    max_agent_steps: z.number().int().min(1).max(8),
+  }),
+  telegram: z.object({
+    /** Reply with synthesized audio too (K-15.2, optional). */
+    voice_replies: z.boolean(),
+    /** Max approvals per grouped message. */
+    approvals_per_message: z.number().int().min(1).max(10),
   }),
   night_shift: z.object({
     /** Optional automatic quiet window if /uyuyorum is forgotten. */
