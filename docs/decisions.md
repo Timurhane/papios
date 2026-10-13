@@ -359,3 +359,27 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
   GitHub Actions dakikaları API ile değil, GitHub ayarlarından izlenir.
 - **V-77** Ziyaret rotası kuş uçuşu en yakın komşu sırasıdır (ücretsiz rota servisi yok); başlangıç noktası
   ayarlardan (`intelligence.home`). Yazdırılabilir sayfada kişi bilgisi yer almaz.
+- **V-78** Analiz aracı raporu ek model çağrısı yapmaz: analizin (herkese açık veriden) bulguları + kural tabanlı
+  önerilerle şablondan üretilir. "Yorum yönetimi" bölümü genel öneridir; Google yorumları okunmaz (Places kapalı).
+- **V-79** Rapor linkinin açık değeri yalnızca iş kuyruğundaki yükte bulunur (mail linki için); istek satırında
+  yalnızca özeti tutulur. Aynı IP'den saatte 3, günde toplam 20 istek (ayarlardan). Reddedenler listesindeki kişiye
+  rapor ekranda gösterilir ama mail gitmez.
+- **V-80** Analiz aracı maili onaysız gider ama merkezi korumadan geçer (çıkış linki, reddedenler listesi); kişi
+  istediği için haftalık temas sayısına ve günlük mail limitine sayılmaz, iş saatini beklemez.
+- **V-81** Sesli konuşmada dışarı gidecek istekler `#taslak` etiketli not olarak kaydedilir; asıl mesaj taslağı
+  Telegram veya panelden hazırlanıp onaya düşer. Sesli konuşma özeti Papi'nin Telegram geçmişine eklenir.
+- **V-82** Sesli konuşma süresi token başına en çok 10 dakikalık parçalarla önceden ayrılır; bitince kullanılmayan
+  süre iade edilir. Bitiş bildirilmezse ayrılan süre harcanmış sayılır. Live model adı ayarlarda
+  (`live_voice.model`) ve masaüstünde doğrulanacak; token API adresi (`v1alpha/auth_tokens`) önizlemede.
+- **V-83** Müşteri portalı panelden ayrı bir uygulamadır (`/portal`), TOTP istemez; müşteri hiçbir tabloyu
+  doğrudan okuyamaz, yalnızca `app.portal_project()` ile kendi projesini görür (durum, adımlar, ödemeler, aylık
+  sayılar). Bayrak kapalıyken giriş yapan müşteri oturumdan çıkarılır.
+- **V-84** Yedek yalnızca veridir (`public`, `app`, giriş hesapları); şema migration'lardan gelir. Geri yükleme
+  testi her pazar şifrelemeden önce yapılır; şifre çözme testi gizli anahtar gerektirdiği için ayda bir elle
+  yapılması önerilir (`docs/yedekten-geri-yukleme.md`).
+- **V-85** Saklama süresi: kazanılmamış firmada son 12 ayda temas/cevap/görüşme yoksa kişiler silinir, firma
+  e-posta/telefon/Instagram alanları boşaltılır, mesaj içerikleri silinir; firma adı ve sayılar kalır. Tek tık
+  silmede adresler ayrıca reddedenler listesine girer ve kayıt "kapalı" olur.
+- **V-86** Ücretsiz limit görünümündeki Actions ve Worker değerleri tahmindir (zamanlanmış işler + ağır iş
+  çalışmaları; dakikalık zamanlayıcı + Telegram + panel + herkese açık istekler). Gerçek değerler sağlayıcı
+  panellerindedir.

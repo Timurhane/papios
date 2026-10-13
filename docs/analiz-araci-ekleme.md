@@ -15,8 +15,8 @@ Sitenin istediğin sayfasına (Netlify'da ilgili HTML dosyası veya sayfa oluşt
 ></iframe>
 ```
 
-Worker bu sayfanın yalnızca izin verilen sitelerde gömülmesine izin verir. Cloudflare Worker ayarlarına bir
-**değişken** (gizli değil) ekle:
+Worker bu sayfanın yalnızca izin verilen sitelerde gömülmesine izin verir. GitHub → repo → Settings → Secrets and
+variables → Actions → **Variables** sekmesine bir değişken (gizli değil) ekle; API deploy iş akışı Worker'a aktarır:
 
 - Ad: `ANALYSIS_EMBED_ORIGINS`
 - Değer: `https://ajnadigitalagency.com` (birden fazla ise boşlukla: `https://ajnadigitalagency.com https://www.ajnadigitalagency.com`)

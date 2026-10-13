@@ -82,11 +82,11 @@ En geç Faz 1 kabulünden önce yapılmalı; Faz 1 kabulü canlı Worker + Teleg
 
 ## Faz 7 — Dış yüz ve sertleştirme
 
-- [ ] Analiz aracı (Turnstile, KVKK onayı, onaysız rapor, Sıcak Gelen) + siteye ekleme rehberi
-- [ ] Canlı sesli konuşma
-- [ ] Müşteri portalı (kapalı bayrak)
-- [ ] Gece yedeği + geri yükleme testi, gizli bilgi taraması, güvenlik gözden geçirmesi, veri saklama/silme
-- [ ] `SUPABASE_ACCESS_TOKEN` dar yetkili token ile değiştirildi (V-23)
-- [ ] Uçtan uca senaryo testi
-- [ ] Teslim dokümanları (Bölüm 19)
-- [ ] **Kabul:** Uçtan uca senaryo geçiyor · yedek geri yükleniyor · ücretsiz limitler içinde kalındığı ölçütlerde görülüyor
+- [x] Analiz aracı (Turnstile, KVKK onayı, onaysız rapor, Sıcak Gelen) + siteye ekleme rehberi
+- [x] Canlı sesli konuşma (kod; canlı deneme masaüstünde)
+- [x] Müşteri portalı (kapalı bayrak)
+- [x] Gece yedeği + geri yükleme testi, gizli bilgi taraması, güvenlik gözden geçirmesi, veri saklama/silme
+- [ ] `SUPABASE_ACCESS_TOKEN` dar yetkili token ile değiştirildi (V-23) — talimat accounts.md §14, masaüstünde
+- [x] Uçtan uca senaryo testi (`apps/api/src/e2e.test.ts`)
+- [x] Teslim dokümanları (Bölüm 19)
+- [x] **Kabul (kod + testler; canlı kabul masaüstünde):** Uçtan uca senaryo geçiyor · yedek geri yükleniyor · ücretsiz limitler içinde kalındığı ölçütlerde görülüyor

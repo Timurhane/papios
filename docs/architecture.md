@@ -299,3 +299,23 @@ Panel: Rutinler (saat/aç-kapa, doğal dil → /panel/routine.parse|save) · İ�
 - Rutin eylemleri veritabanında da izinli listeyle kısıtlı (check constraint); rutin keyfi kod çalıştıramaz.
 - Öneriler ve içerikler onay kuyruğundan geçer; onaylanmadan hiçbir kural/playbook değişmez.
 - Harita karoları `tile.openstreetmap.org` (atıf görünür); panel `Referrer-Policy: strict-origin-when-cross-origin`.
+
+## 19. Faz 7: Dış yüz ve sertleştirme
+
+```
+Analiz aracı: GET/POST /analiz (Turnstile, IP özetiyle saatlik sınır, günlük sınır, KVKK onayı)
+  → submitToolRequest: firma (source analysis_tool) + kişi + tool_requests (token özeti) → iş 'tool.analyze'
+  → runToolAnalysis: analyzeCompanies → buildToolReport (şablon) → Sıcak Gelen → Telegram (hot_reply)
+  → mail bağlıysa: checkOutbound (exempt: analysis_tool_report) → gönderim
+  GET /analiz/r/:token → rapor / hazırlanıyor / süresi doldu (frame-ancestors: ANALYSIS_EMBED_ORIGINS)
+Canlı ses: panel /konus → /panel/voice.start → Worker v1alpha/auth_tokens (tek kullanım; model, talimat, araçlar
+  kilitli) → tarayıcı WebSocket BidiGenerateContentConstrained → araç çağrısı → /panel/voice.tool (yalnızca
+  okuma + not + sessiz mod; sonuçlar maskeli) → /panel/voice.end (süre iadesi, özet)
+Müşteri portalı: /portal (ayrı uygulama) → app.portal_project() (client_portal bayrağı; client_users)
+Yedek: backup.yml gece → dump.sh (veri) → pazar restore-check.sh → age → artifact (30/90 gün)
+KVKK: günlük 'privacy.retention' → app.run_retention; panel → app.delete_company_personal_data
+Ölçütler: app.usage_overview → ücretsiz limitler (DB, dosya, Actions tahmini, Worker tahmini)
+```
+
+- Worker yanıtlarında `nosniff`, HSTS, `frame-ancestors 'none'` (analiz aracı hariç), referrer origin'le sınırlı.
+- CI: `pnpm audit --prod --audit-level=high`, gitleaks tüm geçmiş, RLS her tabloda açık testi.

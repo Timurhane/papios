@@ -1,6 +1,6 @@
 # Faz 7 planı — Dış yüz ve sertleştirme
 
-Durum: **Onay bekliyor** (E-1, E-2, E-3).
+Durum: **Tamamlandı (kod)**, canlı kabul masaüstü kurulum oturumunda. E-1 → K-17.9, E-2 → K-12.6, E-3 → K-15.7.
 Kabul: Uçtan uca senaryo geçiyor · yedek geri yükleniyor · ücretsiz limitler içinde kalındığı ölçütlerde görülüyor.
 
 ## Adımlar

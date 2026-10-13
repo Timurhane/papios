@@ -19,7 +19,8 @@ Durum: ⬜ yapılmadı · ✅ tamam · ⏸ ileriki faz
 | 9   | Meta geliştirici uygulaması + Instagram işletme hesabı | Faz 2 (isteğe bağlı; onay süreci uzun olabilir) | ⬜    |
 | 10  | Google Cloud: PageSpeed Insights API anahtarı          | Faz 2                                           | ⬜    |
 | 11  | Natro mail bilgileri (yalnızca A-1 kararı için)        | Faz 3 öncesi                                    | ⏸     |
-| 12  | Turnstile site anahtarı                                | Faz 7                                           | ⏸     |
+| 12  | Turnstile site anahtarı                                | Faz 4 (demo), Faz 7 (analiz aracı)              | ⬜    |
+| 13  | Yedek şifreleme anahtarı (age) + `SUPABASE_DB_URL`     | Faz 7                                           | ⬜    |
 
 ---
 
@@ -194,6 +195,16 @@ saatine göre önerir. Kimseye davet gönderilmez.
 
 A-1'de Gmail seçeneği seçilirse aynı OAuth uygulamasına Gmail kapsamı eklenir; ayrı bir uygulama gerekmez.
 
-## 14. İleriki fazlar
+## 14. Faz 7 (masaüstü oturumu)
 
-Bu adımlar ilgili faz başlarken tek tek, aynı ayrıntıda verilecek.
+1. **Yedek:** `docs/yedekten-geri-yukleme.md` → "Bir kerelik kurulum" (age anahtarı, `SUPABASE_DB_URL`).
+2. **Analiz aracı:** Turnstile alan adlarına Worker alan adını ve AJNA sitesini ekle; GitHub Variables →
+   `ANALYSIS_EMBED_ORIGINS`; `docs/analiz-araci-ekleme.md`. Aydınlatma metnini bir hukukçuya kontrol ettir.
+3. **Canlı ses:** AI Studio'da Gemini Live'ın ücretsiz katmanda hesabında açık olduğunu kontrol et; Ayarlar →
+   `live_voice.model` değerini AI Studio'daki güncel Live model adıyla karşılaştır (Claude birlikte bakar).
+4. **Supabase erişim anahtarını daralt (V-23):** supabase.com → Account → Access Tokens → yeni token: süre 90 gün,
+   yalnızca bu projede veritabanı ve auth yapılandırması yazma izni (Fine-grained mevcutsa) → GitHub secret
+   `SUPABASE_ACCESS_TOKEN`'ı güncelle → eski "Full access" token'ı sil → Actions → "DB deploy" çalıştır.
+5. **Müşteri portalı (isteğe bağlı, kapalı gelir):** açmak istediğinde Supabase Auth'ta müşteri kullanıcısı
+   oluştur, `client_users` tablosuna (kullanıcı, proje) satırı ekle, `feature_flags.client_portal = true`.
+   Müşteri adresi: `<panel>/portal`.
