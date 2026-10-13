@@ -127,6 +127,12 @@ export const settingsSchemas = {
     messages_per_demo_per_day: z.number().int().positive(),
     messages_total_per_day: z.number().int().positive(),
   }),
+  operations: z.object({
+    /** K-14.4: how long the client's setup form link stays open. */
+    setup_form_valid_days: z.number().int().positive(),
+    /** Days after the due date before an unpaid charge is reported on Telegram (K-15.4). */
+    overdue_grace_days: z.number().int().min(0),
+  }),
   sales: z.object({
     meeting_minutes: z.number().int().positive(),
     slot_count: z.number().int().min(1).max(5),

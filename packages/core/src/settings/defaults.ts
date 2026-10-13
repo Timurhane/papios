@@ -126,6 +126,8 @@ export const defaultSettings: Settings = {
   analysis_tool: { daily_limit: 20 },
   // K-13.7
   demo: { ttl_days: 14, messages_per_demo_per_day: 30, messages_total_per_day: 200 },
+  // Phase 5 (assumption V-59)
+  operations: { setup_form_valid_days: 30, overdue_grace_days: 3 },
   // Phase 4 sales defaults (assumption V-48)
   sales: {
     meeting_minutes: 30,

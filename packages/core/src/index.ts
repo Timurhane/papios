@@ -24,3 +24,4 @@ export * from './outreach/playbook.ts';
 export * from './outreach/guard.ts';
 export * from './sales/pricing.ts';
 export * from './sales/redact.ts';
+export * from './finance/finance.ts';
