@@ -78,8 +78,8 @@ pnpm test:db              # pgTAP/RLS testleri, çalışan yerel Supabase'e kar�
 pnpm test:db:local        # aynı testler, Docker'sız: düz Postgres + Supabase taklidi
 pnpm gen:seed             # ayar seed'ini packages/core defaults'tan üret
 pnpm --filter @papi/web e2e  # Playwright duman testi
-pnpm --filter web dev     # panel geliştirme sunucusu
-pnpm --filter api dev     # wrangler dev
+pnpm --filter @papi/web dev   # panel geliştirme sunucusu
+pnpm --filter @papi/api dev   # wrangler dev (secrets: apps/api/.dev.vars)
 supabase db reset         # migration + seed'i yerelde baştan uygula
 ```
 
@@ -89,6 +89,8 @@ supabase db reset         # migration + seed'i yerelde baştan uygula
 - Her tabloda `tenant_id`; RLS her tabloda açık. Servis anahtarı (`service_role`) yalnızca sunucu tarafında.
 - Dışarı mesaj üreten/gönderen her fonksiyon: (1) reddedenler listesi kontrolü, (2) onay durumu kontrolü,
   (3) audit log kaydı yapar. Bu kontroller merkezi bir koruma katmanındadır, atlanamaz.
+- Worker'a özgü kod `apps/api`, saf ve test edilebilir mantık `packages/core`'da. DB erişimi `Repo` arayüzünden
+  (testte `MemoryRepo`, canlıda `SupabaseRepo`).
 - LLM çağrıları doğrudan SDK ile yapılmaz; `packages/core/llm` üzerinden geçer (yönlendirme, kota, önbellek,
   sınıflandırma, `llm_calls` kaydı).
 - Promptlar kod içine gömülmez; `packages/prompts` altında versiyonlu dosyalardadır.
