@@ -121,7 +121,20 @@ export const settingsSchemas = {
   vat: z.object({ mode: z.enum(['unspecified', 'included', 'excluded']) }),
   revenue_target: z.object({ monthly_kurus: kurus.nullable() }),
   analysis_tool: z.object({ daily_limit: z.number().int().positive() }),
-  demo: z.object({ ttl_days: z.number().int().positive() }),
+  demo: z.object({
+    ttl_days: z.number().int().positive(),
+    /** Visitor messages per demo per day and across all demos per day (public endpoint, K-17.4). */
+    messages_per_demo_per_day: z.number().int().positive(),
+    messages_total_per_day: z.number().int().positive(),
+  }),
+  sales: z.object({
+    meeting_minutes: z.number().int().positive(),
+    slot_count: z.number().int().min(1).max(5),
+    slot_lead_hours: z.number().int().min(0),
+    slot_horizon_days: z.number().int().min(1).max(30),
+    preferred_times: z.array(hhmm).min(1),
+    proposal_valid_days: z.number().int().positive(),
+  }),
   pricing: z.object({
     no_setup_path: z.object({
       commitment_months: z.number().int().positive(),

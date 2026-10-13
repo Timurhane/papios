@@ -22,3 +22,5 @@ export * from './outreach/token.ts';
 export * from './outreach/classify.ts';
 export * from './outreach/playbook.ts';
 export * from './outreach/guard.ts';
+export * from './sales/pricing.ts';
+export * from './sales/redact.ts';

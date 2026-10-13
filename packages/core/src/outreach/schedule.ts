@@ -116,3 +116,44 @@ export function sendGapMinutes(
 ): number {
   return cfg.min_gap_minutes + Math.floor(rand() * (cfg.max_gap_minutes - cfg.min_gap_minutes + 1));
 }
+
+export interface BusyRange {
+  start: Date;
+  end: Date;
+}
+
+export interface SlotOptions {
+  count: number;
+  durationMinutes: number;
+  /** Earliest proposal is this many hours after `from`. */
+  leadHours: number;
+  horizonDays: number;
+  /** Local start times to try (HH:MM); rotated per day so proposals vary. */
+  preferredTimes: string[];
+}
+
+/**
+ * Meeting proposals (Satıcı): at most one per business day, inside business hours, clear of busy ranges
+ * (Google Calendar free/busy when connected, otherwise none).
+ */
+export function meetingSlots(from: Date, h: Hours, busy: BusyRange[], o: SlotOptions): Date[] {
+  const earliest = from.getTime() + o.leadHours * 3_600_000;
+  const end = toMinutes(h.end);
+  const out: Date[] = [];
+  for (let i = 0; i <= o.horizonDays && out.length < o.count; i++) {
+    const p = parts(new Date(from.getTime() + i * 86_400_000), h.timezone);
+    if (!h.days.includes(p.weekday)) continue;
+    for (let k = 0; k < o.preferredTimes.length; k++) {
+      const hhmm = o.preferredTimes[(i + k) % o.preferredTimes.length] ?? h.start;
+      const startMin = toMinutes(hhmm);
+      if (startMin < toMinutes(h.start) || startMin + o.durationMinutes > end) continue;
+      const s = zoned(p.y, p.m, p.d, startMin, h.timezone);
+      const e = s.getTime() + o.durationMinutes * 60_000;
+      if (s.getTime() < earliest) continue;
+      if (busy.some((b) => b.start.getTime() < e && b.end.getTime() > s.getTime())) continue;
+      out.push(s);
+      break;
+    }
+  }
+  return out;
+}

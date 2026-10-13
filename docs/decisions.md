@@ -216,6 +216,15 @@ Biçim: `K-<bölüm>.<sıra>` — karar kimliği. Kod yorumlarında ve PR'larda 
 
 ---
 
+## Faz 4 kararları (2026-10-13, Timurhan onayı)
+
+- **K-4.9** (A-7) Gelen cevaplar ve görüşme notları modele gitmeden önce kodla ayıklanır: e-posta, telefon, CRM'deki
+  kişi adları, unvanlı adlar ("Ahmet Bey", "Dr. ..."), imza bloğu, TC kimlik ve IBAN yer tutucuyla değiştirilir.
+  Geriye kalan işletme ihtiyacı "dahili" sınıftadır ve ücretsiz modele gidebilir. Kazanılmış müşteri verisi hiçbir
+  durumda gitmez (K-4.7 aynen geçerli).
+- **K-13.12** (B-1) Teklif PDF'i panelde, tarayıcıda üretilir (pdf-lib + Türkçe destekli gömülü yazı tipi); dosya
+  Supabase Storage'a özel olarak yüklenir.
+
 ## Açık kararlar (Timurhan onayı bekliyor)
 
 | #   | Konu                                                           | Ne zaman gerekli                   |

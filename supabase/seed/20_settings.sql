@@ -16,6 +16,7 @@ insert into public.settings (tenant_id, key, value) values
   ('00000000-0000-4000-8000-00000000a1a0', 'vat', '{"mode":"unspecified"}'::jsonb),
   ('00000000-0000-4000-8000-00000000a1a0', 'revenue_target', '{"monthly_kurus":null}'::jsonb),
   ('00000000-0000-4000-8000-00000000a1a0', 'analysis_tool', '{"daily_limit":20}'::jsonb),
-  ('00000000-0000-4000-8000-00000000a1a0', 'demo', '{"ttl_days":14}'::jsonb),
+  ('00000000-0000-4000-8000-00000000a1a0', 'demo', '{"ttl_days":14,"messages_per_demo_per_day":30,"messages_total_per_day":200}'::jsonb),
+  ('00000000-0000-4000-8000-00000000a1a0', 'sales', '{"meeting_minutes":30,"slot_count":3,"slot_lead_hours":4,"slot_horizon_days":10,"preferred_times":["10:00","14:00","11:30","16:00"],"proposal_valid_days":14}'::jsonb),
   ('00000000-0000-4000-8000-00000000a1a0', 'pricing', '{"no_setup_path":{"commitment_months":12,"first_month_upfront":true},"setup_path":{"setup_fee_in_monthly_fees":1,"monthly_discount_pct":15,"commitment_months":3},"operations_monthly_dev_hours":null,"custom_project":{"min_project_kurus":5000000,"maintenance_pct_min":8,"maintenance_pct_max":10,"daily_rate_kurus":null,"uncertainty_pct":null}}'::jsonb)
 on conflict (tenant_id, key) do nothing;

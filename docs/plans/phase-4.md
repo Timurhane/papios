@@ -1,6 +1,6 @@
 # Faz 4 planı — Satış
 
-Durum: **Onay bekliyor.**
+Durum: **Uygulanıyor** (Timurhan onayladı; A-7 → K-4.9, B-1 → K-13.12).
 Kabul: Sesli görüşme notundan teklif taslağı ve PDF oluşuyor · demo linki çalışıyor ve 14 gün sonra kapanıyor.
 
 ## Adımlar

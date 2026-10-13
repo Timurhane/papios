@@ -125,7 +125,16 @@ export const defaultSettings: Settings = {
   // K-12.5; default value is assumption V-12
   analysis_tool: { daily_limit: 20 },
   // K-13.7
-  demo: { ttl_days: 14 },
+  demo: { ttl_days: 14, messages_per_demo_per_day: 30, messages_total_per_day: 200 },
+  // Phase 4 sales defaults (assumption V-48)
+  sales: {
+    meeting_minutes: 30,
+    slot_count: 3,
+    slot_lead_hours: 4,
+    slot_horizon_days: 10,
+    preferred_times: ['10:00', '14:00', '11:30', '16:00'],
+    proposal_valid_days: 14,
+  },
   // K-7.3, K-7.4
   pricing: {
     no_setup_path: { commitment_months: 12, first_month_upfront: true },
