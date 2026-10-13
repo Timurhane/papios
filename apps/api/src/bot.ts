@@ -20,6 +20,7 @@ import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
 import { handleOpsCommand, OPS_HELP } from './ops-bot.ts';
+import { AUTOMATION_HELP, handleRoutineCallback, handleRoutineCommand } from './automation-bot.ts';
 import {
   afterProposalDecision,
   handleSalesCallback,
@@ -29,7 +30,10 @@ import {
 } from './sales-bot.ts';
 import {
   completeOneClick,
+  endNightShift,
   onApprovalDecided,
+  onAutomationDecided,
+  startNightShift,
   type ApprovalRow,
   type OutreachDeps,
   type Repo,
@@ -67,6 +71,7 @@ Komutlar:
 /kota – yapay zeka kota durumu
 ${SALES_HELP}
 ${OPS_HELP}
+${AUTOMATION_HELP}
 /uyuyorum – sessiz mod
 /uyandim – sessiz modu kapat ve özet al`;
 
@@ -249,6 +254,10 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
       await handleOpsCommand(command, args, chatId, deps);
       return;
 
+    case 'rutin':
+      await handleRoutineCommand(args, chatId, deps);
+      return;
+
     case 'ekle': {
       let url: URL;
       try {
@@ -302,9 +311,11 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
         on: true,
         since: new Date().toISOString(),
       } satisfies QuietMode);
+      // K-15.5: the night shift searches, analyses and drafts within its budget; mail waits for morning.
+      await startNightShift({ repo });
       await tg.sendMessage(
         chatId,
-        'İyi uykular 🌙 Sessiz moddayım: yalnızca sistem hataları ve sıcak cevaplar gelecek. Diğer her şeyi /uyandim deyince özetleyeceğim.',
+        'İyi uykular 🌙 Sessiz moddayım ve gece vardiyası başladı: yeni aday arıyor, analiz edip taslak hazırlıyorum. Yalnızca sistem hataları ve sıcak cevaplar gelecek; gerisini /uyandim deyince özetleyeceğim.',
       );
       return;
 
@@ -315,10 +326,11 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
         on: false,
         since: new Date().toISOString(),
       } satisfies QuietMode);
-      const [counts, approvals, held] = await Promise.all([
+      const [counts, approvals, held, shift] = await Promise.all([
         repo.countAuditSince(since),
         repo.listPendingApprovals(100),
         repo.getState<{ kind: string; text: string }[]>('held_notifications'),
+        endNightShift({ repo }),
       ]);
       await repo.setState('held_notifications', []);
       const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -327,6 +339,7 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
         `• Kayda geçen işlem: ${total}`,
         `• Onay bekleyen: ${approvals.length}`,
         ...(held ?? []).slice(-10).map((h) => `• ${h.text}`),
+        ...(shift ? ['', ...shift] : []),
       ];
       if (approvals.length) lines.push('', 'Onaylar için /onaylar');
       await tg.sendMessage(chatId, lines.join('\n'));
@@ -365,6 +378,7 @@ function previewOf(a: ApprovalRow): string {
 // --- approvals ---------------------------------------------------------------------------------
 
 async function handleCallback(callbackId: string, data: string, chatId: number, deps: BotDeps) {
+  if (await handleRoutineCallback(callbackId, data, deps)) return;
   const touchCb = decodeTouchCallback(data);
   if (touchCb) {
     await handleTouchCallback(callbackId, touchCb, chatId, deps);
@@ -445,6 +459,8 @@ async function afterDecision(
     await onApprovalDecided(deps.outreach, approval.id, status);
   if (approval.kind === 'proposal')
     await afterProposalDecision(approval.id, status, deps.ownerId, deps);
+  if (approval.kind === 'content' || approval.kind === 'suggestion')
+    await onAutomationDecided(deps, approval.id, status);
 }
 
 /** Style memory keeps only the model-written part: greetings with names never reach a prompt (K-4.7). */

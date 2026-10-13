@@ -71,10 +71,19 @@ const fetchFn = (async (input: string | URL) => {
   throw new Error(`offline ${url}`);
 }) as unknown as typeof fetch;
 
-function setup(render: HeavyDeps['render'] = null) {
+function setup(render: HeavyDeps['render'] = null, extra: Partial<HeavyDeps> = {}) {
   const repo = new MemoryRepo();
   const tg = new Tg();
-  const deps: HeavyDeps = { repo, llm: summaryLLM(repo), tg, ownerChatId: 1, render, fetchFn };
+  const deps: HeavyDeps = {
+    repo,
+    llm: summaryLLM(repo),
+    tg,
+    ownerChatId: 1,
+    render,
+    fetchFn,
+    sleep: async () => undefined,
+    ...extra,
+  };
   const run = () =>
     dispatch({
       store: repo.queueStore,
@@ -158,5 +167,105 @@ describe('heavy jobs (Actions worker)', () => {
     expect(c?.score).not.toBeNull();
     expect(['playbook', 'waiting']).toContain(c?.next_step_kind);
     expect(c?.score_rationale.join(' ')).toContain('Web sitesi yok');
+  });
+});
+
+describe('Phase 6 signals and geocoding', () => {
+  const company = {
+    name: 'Yılmaz Emlak',
+    name_norm: 'yilmaz emlak',
+    source: 'manual' as const,
+    domain: 'yilmazemlak.com',
+    website_url: 'https://yilmazemlak.com/',
+  };
+
+  it('site rescan turns a change since last week into a signal and moves an idle lead', async () => {
+    const { repo, tg, run } = setup();
+    const id = await repo.createCompany(company);
+    await repo.updateCompany(id, { score: 80, stage: 'waitlist' });
+    await repo.saveSiteSnapshot(id, {
+      booking: true,
+      whatsapp: false,
+      onlineOrder: false,
+      chat: false,
+      contactForm: false,
+      branches: false,
+      careers: false,
+      campaign: false,
+    });
+    await repo.enqueue('signals.site_scan', { limit: 10 }, { heavy: true });
+    await run();
+    expect(tg.texts[0]).toContain('Yılmaz Emlak: Siteden online randevu kaldırıldı');
+    expect(await repo.getCompany(id)).toMatchObject({ assigned_playbook: 'sinyal' });
+    expect(repo.jobs.map((j) => j.type)).toContain('analysis.batch');
+  });
+
+  it('grounded news for top companies becomes signals', async () => {
+    const gemini: LLMProvider = {
+      id: 'gemini',
+      supportsGrounding: true,
+      async generate() {
+        return {
+          text: JSON.stringify({
+            items: [{ kind: 'new_opening', description: 'İkinci şubesini açtı', url: null }],
+          }),
+          usage: { tokensIn: 1, tokensOut: 1 },
+        };
+      },
+    };
+    const repo0 = new MemoryRepo();
+    const llm = new LLMService({
+      providers: { gemini },
+      settings: defaultSettings.llm,
+      store: repo0.llmStore,
+    });
+    const { repo, tg, run } = setup(null, { llm });
+    const id = await repo.createCompany(company);
+    await repo.updateCompany(id, { score: 90, stage: 'analyzed' });
+    await repo.enqueue('signals.news', { limit: 5 }, { heavy: true });
+    await run();
+    expect(tg.texts[0]).toContain('Yılmaz Emlak: İkinci şubesini açtı');
+  });
+
+  it('OSM: a place that appears after an area was first covered is a new opening', async () => {
+    let places = [{ tags: { name: 'Kıyı Otel', website: 'kiyiotel.com' } }];
+    const osmFetch = (async (input: string | URL, init?: RequestInit) =>
+      String(input).startsWith('https://overpass-api.de')
+        ? new Response(JSON.stringify({ elements: places }))
+        : fetchFn(input, init)) as typeof fetch;
+    const { repo, tg, run } = setup(null, { fetchFn: osmFetch });
+    await repo.enqueue('signals.osm_new', {}, { heavy: true });
+    await run();
+    expect(tg.texts.some((t) => t.includes('Yeni açılan'))).toBe(false);
+
+    places = [...places, { tags: { name: 'Yeni Klinik', website: 'yilmazemlak.com' } }];
+    await repo.enqueue('signals.osm_new', {}, { heavy: true });
+    await run();
+    expect(tg.texts.find((t) => t.includes('Yeni açılan'))).toContain('Yeni Klinik (Balıkesir)');
+  });
+
+  it('geocodes addresses through Nominatim once and caches the answer', async () => {
+    const urls: string[] = [];
+    const geoFetch = (async (input: string | URL) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify([{ lat: '39.65', lon: '27.88' }]));
+    }) as typeof fetch;
+    const { repo, run } = setup(null, { fetchFn: geoFetch });
+    for (const n of ['A', 'B']) {
+      const id = await repo.createCompany({
+        name: n,
+        name_norm: n.toLowerCase(),
+        source: 'manual',
+      });
+      await repo.updateCompany(id, { address: 'Anafartalar Cd. 1', city: 'Balıkesir' });
+    }
+    await repo.enqueue('geo.geocode', {}, { heavy: true });
+    await run();
+    expect(urls).toHaveLength(1); // same address → cache
+    expect(urls[0]).toContain('nominatim.openstreetmap.org');
+    expect([...repo.locations.values()]).toEqual([
+      { lat: 39.65, lng: 27.88 },
+      { lat: 39.65, lng: 27.88 },
+    ]);
   });
 });

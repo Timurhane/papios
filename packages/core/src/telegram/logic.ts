@@ -24,6 +24,7 @@ export const COMMANDS = [
   'not',
   'tahsilat',
   'proje',
+  'rutin',
   'start',
   'yardim',
 ] as const;

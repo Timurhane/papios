@@ -1,14 +1,19 @@
-import { formatApprovalGroup, JobRegistry, normalizeName, type LLMService } from '@papi/core';
+import {
+  formatApprovalGroup,
+  JobRegistry,
+  normalizeName,
+  redactPersonal,
+  type LLMService,
+} from '@papi/core';
 import {
   addFromLink,
   analyzeCompanies,
-  draftMonthlyReports,
   draftReply,
-  notifyOverdue,
-  syncCharges,
   findWebsiteByName,
+  runRoutine,
   formatOutcome,
   upsertCompany,
+  type AutomationDeps,
   type InstagramDiscovery,
   type OpsDeps,
   type SalesDeps,
@@ -31,10 +36,12 @@ export interface JobDeps {
   sales?: SalesDeps;
   /** Operatör (Phase 5): charges, overdue alerts, client reports. */
   ops?: OpsDeps;
+  /** Phase 6: routines. */
+  automation?: AutomationDeps;
 }
 
 const EMBED_BATCH = 16;
-const EMBED_TABLES: EmbeddingTable[] = ['knowledge_items', 'style_memory', 'memory_items'];
+const EMBED_TABLES: EmbeddingTable[] = ['knowledge_items', 'style_memory', 'memory_items', 'notes'];
 
 export function buildRegistry(deps: JobDeps): JobRegistry {
   const { repo, llm } = deps;
@@ -105,8 +112,9 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
         for (const table of EMBED_TABLES) {
           const rows = await repo.missingEmbeddings(table, EMBED_BATCH);
           if (rows.length === 0) continue;
+          // Notes are Timurhan's own words: personal data is masked before embedding (K-4.9).
           const vectors = await llm.embed(
-            rows.map((r) => r.text),
+            rows.map((r) => (table === 'notes' ? redactPersonal(r.text).text : r.text)),
             { agent: 'system', task: `embed.${table}`, dataClass: 'internal' },
           );
           for (const [i, row] of rows.entries()) {
@@ -118,23 +126,10 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
           return; // one table per run keeps the cron tick inside the subrequest budget
         }
       })
-      .register('finance.daily', async () => {
-        if (!deps.ops) return;
-        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(
-          new Date(),
-        );
-        await syncCharges(deps.ops, today);
-        await notifyOverdue(deps.ops);
-      })
-      .register('client.monthly_report', async () => {
-        if (!deps.ops) return;
-        const n = await draftMonthlyReports(deps.ops);
-        if (n)
-          await notify(
-            deps,
-            'approval_pending',
-            `📊 ${n} aylık müşteri raporu onay bekliyor: /onaylar`,
-          );
+      // Routines (K-13.5): queued by the cron tick when due; actions come from an allowlist.
+      .register('routine.run', async (job) => {
+        if (!deps.automation) return;
+        await runRoutine(deps.automation, String(job.payload.routineId ?? ''));
       })
       // Satıcı: answer draft for an interested / question reply (redacted input, K-4.9).
       .register('satici.reply_draft', async (job) => {
@@ -213,11 +208,6 @@ export function scheduledJobs(now: Date): { type: string; payload: Record<string
   if (now.getUTCMinutes() % 15 === 0) out.push({ type: 'embed.missing', payload: {} });
   if (now.getUTCHours() === 3 && now.getUTCMinutes() === 7)
     out.push({ type: 'llm.verify_models', payload: {} });
-  // 09:05 Istanbul: monthly charges + overdue alerts (K-13.8, K-15.4)
-  if (now.getUTCHours() === 6 && now.getUTCMinutes() === 5)
-    out.push({ type: 'finance.daily', payload: {} });
-  // 1st of the month 09:20 Istanbul: client report drafts (Phase 5)
-  if (now.getUTCDate() === 1 && now.getUTCHours() === 6 && now.getUTCMinutes() === 20)
-    out.push({ type: 'client.monthly_report', payload: {} });
+  // Charges, overdue alerts and client reports are routines since Phase 6 (payment_check, monthly_reports).
   return out;
 }

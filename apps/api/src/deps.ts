@@ -14,6 +14,7 @@ import {
   GoogleCalendar,
   InstagramDiscovery,
   SupabaseRepo,
+  type AutomationDeps,
   type CalendarProvider,
   type OpsDeps,
   type OutreachDeps,
@@ -41,6 +42,8 @@ export interface AppDeps {
   publicApiUrl?: string;
   /** Operations (Phase 5): projects, setup forms, finance, reports. */
   ops?: OpsDeps;
+  /** Phase 6: routines, night shift, signals, Kalem, learning. */
+  automation?: AutomationDeps;
   /** Injected in tests for outbound calls made by route handlers (Supabase Auth check). */
   fetchImpl?: typeof fetch;
 }
@@ -102,6 +105,12 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
   };
   const token = env.GITHUB_DISPATCH_TOKEN;
   const repoName = env.GITHUB_REPOSITORY;
+  const dispatchHeavy = token && repoName ? () => dispatchWorkflow(token, repoName) : undefined;
+  const ops: OpsDeps = {
+    repo,
+    ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
+    notify: opsNotify,
+  };
   return {
     repo,
     llm,
@@ -116,15 +125,21 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
       ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
       notify: opsNotify,
     },
-    ops: {
+    ops,
+    automation: {
       repo,
-      ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
-      notify: opsNotify,
+      llm,
+      ops,
+      notify: async (kind, text) => {
+        await notify({ repo, tg, ownerChatId: env.TELEGRAM_OWNER_ID }, kind, text);
+      },
+      ...(env.PANEL_URL ? { panelUrl: env.PANEL_URL } : {}),
+      ...(dispatchHeavy ? { dispatchHeavy } : {}),
     },
     ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
     pageSpeedKey: env.PAGESPEED_API_KEY,
     panelUrl: env.PANEL_URL,
-    ...(token && repoName ? { dispatchHeavy: () => dispatchWorkflow(token, repoName) } : {}),
+    ...(dispatchHeavy ? { dispatchHeavy } : {}),
   };
 }
 

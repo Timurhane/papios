@@ -1,6 +1,6 @@
-import { defineTool, type AgentTool, type LLMService } from '@papi/core';
+import { defineTool, redactPersonal, type AgentTool, type LLMService } from '@papi/core';
 import { z } from 'zod';
-import type { Repo } from '@papi/server';
+import { searchNotes, type Repo } from '@papi/server';
 import { searchKnowledge } from './knowledge.ts';
 
 const KNOWLEDGE_KINDS = [
@@ -27,6 +27,23 @@ export function papiTools(repo: Repo, llm: LLMService): AgentTool<unknown>[] {
         return hits.length
           ? hits.map(({ title, content }) => ({ title, content }))
           : 'Bilgi bankasında sonuç yok.';
+      },
+    }),
+    defineTool({
+      name: 'search_notes',
+      description:
+        'Timurhan\'ın notlarında ve görüşme özetlerinde anlamca arar ("geçen ay o klinikçi ne demişti").',
+      argsHint: '{"query": "aranacak konu"}',
+      args: z.object({ query: z.string().min(2).max(200) }),
+      run: async ({ query }) => {
+        const hits = await searchNotes({ repo, llm }, query, 4);
+        // Results go back into a free-tier prompt: personal data stays masked (K-4.9).
+        return hits.length
+          ? hits.map((h) => ({
+              date: h.created_at.slice(0, 10),
+              note: redactPersonal(h.body).text.slice(0, 600),
+            }))
+          : 'Notlarda sonuç yok.';
       },
     }),
     defineTool({

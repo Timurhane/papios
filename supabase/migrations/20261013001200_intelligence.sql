@@ -127,3 +127,22 @@ as $$
 $$;
 revoke all on function app.match_notes(uuid, extensions.vector, integer) from public;
 grant execute on function app.match_notes(uuid, extensions.vector, integer) to authenticated, service_role;
+
+-- K-4.7: notes about won clients (project-linked or on a won company) are never embedded by a
+-- free-tier model; everything else is redacted in code before embedding (K-4.9).
+create function app.notes_to_embed(p_tenant_id uuid, p_limit integer)
+returns table (id uuid, body text)
+language sql
+stable
+set search_path = ''
+as $$
+  select n.id, n.body
+  from public.notes n
+  left join public.companies c on c.id = n.company_id and c.tenant_id = n.tenant_id
+  where n.tenant_id = p_tenant_id and n.embedding is null and n.project_id is null
+    and coalesce(c.stage, 'new') <> 'won'
+  order by n.created_at
+  limit least(p_limit, 100);
+$$;
+revoke all on function app.notes_to_embed(uuid, integer) from public;
+grant execute on function app.notes_to_embed(uuid, integer) to service_role;

@@ -251,6 +251,13 @@ export class SupabaseRepo implements Repo {
   }
 
   async missingEmbeddings(table: EmbeddingTable, limit: number) {
+    if (table === 'notes') {
+      const rows = must(
+        await this.app().rpc('notes_to_embed', { p_tenant_id: this.tenantId, p_limit: limit }),
+        'notes to embed',
+      ) as { id: string; body: string }[];
+      return rows.map((r) => ({ id: r.id, text: r.body }));
+    }
     let q = this.db
       .from(table)
       .select(`id, ${EMBED_TEXT[table]}`)

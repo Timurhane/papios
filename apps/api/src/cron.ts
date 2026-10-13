@@ -1,7 +1,8 @@
 import { dispatch } from '@papi/core';
+import { nightShiftTick, tickRoutines } from '@papi/server';
 import type { AppDeps } from './deps.ts';
 import { buildRegistry, scheduledJobs } from './jobs/handlers.ts';
-import { notify } from './notify.ts';
+import { isQuiet, notify } from './notify.ts';
 import { runOutreachStep } from './outreach.ts';
 
 /** Light jobs per tick: each may use several subrequests (Workers free: 50 per invocation). */
@@ -20,9 +21,15 @@ export async function runCron(deps: AppDeps, now: Date): Promise<void> {
     panelUrl: deps.panelUrl,
     ...(deps.sales ? { sales: deps.sales } : {}),
     ...(deps.ops ? { ops: deps.ops } : {}),
+    ...(deps.automation ? { automation: deps.automation } : {}),
   };
   for (const job of scheduledJobs(now))
     await deps.repo.enqueue(job.type, job.payload, { unique: true });
+  // Routines (K-13.5) share this every-minute trigger (Workers free plan: 5 cron triggers).
+  await tickRoutines({ repo: deps.repo, now: () => now });
+  // Night shift (K-15.5): one lead search every 30 minutes while quiet, within the nightly budget.
+  if (deps.automation && now.getUTCMinutes() % 30 === 0 && (await isQuiet(deps.repo, now)))
+    await nightShiftTick({ ...deps.automation, now: () => now });
   const r = await dispatch({
     store: deps.repo.queueStore,
     registry: buildRegistry(jobDeps),

@@ -11,7 +11,9 @@ import {
   advanceEnrollments,
   autoEnroll,
   CHANNEL_LABEL,
+  nightDraftBudgetUsed,
   processInbound,
+  reconcileAutomationDecisions,
   reconcilePanelDecisions,
   reconcileProposalDecisions,
   sendNextEmail,
@@ -39,6 +41,8 @@ const NOTIFIED_KEEP = 300;
 export async function runOutreachStep(d: OutreachTickDeps, now: Date): Promise<string> {
   switch (now.getUTCMinutes() % 4) {
     case 0: {
+      // K-15.5: the night shift stops drafting once its budget is used; the rest waits for morning.
+      if (await nightDraftBudgetUsed(d)) return 'advance:night_budget';
       await autoEnroll(d.outreach, 3);
       const before = new Set((await d.repo.listPendingApprovals(200)).map((a) => a.id));
       const r = await advanceEnrollments(d.outreach, crypto.randomUUID());
@@ -48,7 +52,8 @@ export async function runOutreachStep(d: OutreachTickDeps, now: Date): Promise<s
     case 1: {
       const decided =
         (await reconcilePanelDecisions(d.outreach)) +
-        (await reconcileProposalDecisions({ repo: d.repo }));
+        (await reconcileProposalDecisions({ repo: d.repo })) +
+        (await reconcileAutomationDecisions({ repo: d.repo }));
       return `panel:${decided} send:${await sendNextEmail(d.outreach)}`;
     }
     case 2: {
