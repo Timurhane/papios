@@ -13,6 +13,7 @@ import {
   CHANNEL_LABEL,
   processInbound,
   reconcilePanelDecisions,
+  reconcileProposalDecisions,
   sendNextEmail,
   type OutreachDeps,
   type Repo,
@@ -45,7 +46,9 @@ export async function runOutreachStep(d: OutreachTickDeps, now: Date): Promise<s
       return `advance:${r.drafts}/${r.tasks}/${r.skipped}/${r.completed}`;
     }
     case 1: {
-      const decided = await reconcilePanelDecisions(d.outreach);
+      const decided =
+        (await reconcilePanelDecisions(d.outreach)) +
+        (await reconcileProposalDecisions({ repo: d.repo }));
       return `panel:${decided} send:${await sendNextEmail(d.outreach)}`;
     }
     case 2: {

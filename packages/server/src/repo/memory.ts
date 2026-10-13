@@ -872,6 +872,10 @@ export class MemoryRepo implements Repo {
     this.rateHits.set(key, n);
     return n <= max;
   }
+  members = new Set<string>();
+  async isMember(userId: string) {
+    return this.members.has(userId);
+  }
 }
 
 function dot(a: number[], b: number[]) {

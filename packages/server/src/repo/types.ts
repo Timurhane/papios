@@ -445,4 +445,6 @@ export interface Repo {
     total: number,
   ): Promise<DemoTouch>;
   hitRateLimit(key: string, windowSeconds: number, max: number): Promise<boolean>;
+  /** Panel → Worker calls: is this auth user a member of the tenant? */
+  isMember(userId: string): Promise<boolean>;
 }

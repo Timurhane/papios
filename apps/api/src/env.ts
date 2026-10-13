@@ -32,6 +32,14 @@ export const envSchema = z.object({
   PUBLIC_API_URL: z.url().optional(),
   /** Secret (>= 32 chars) for signed public tokens: unsubscribe and demo links (K-17.4). */
   PUBLIC_TOKEN_SECRET: z.string().min(32).optional(),
+  /** Google Calendar (K-13.10): OAuth client + refresh token; off until all three are set. */
+  GOOGLE_CLIENT_ID: optionalSecret,
+  GOOGLE_CLIENT_SECRET: optionalSecret,
+  GOOGLE_REFRESH_TOKEN: optionalSecret,
+  GOOGLE_CALENDAR_ID: optionalSecret,
+  /** Cloudflare Turnstile (K-3.12) for public pages: demo now, analysis tool later. */
+  TURNSTILE_SITE_KEY: optionalSecret,
+  TURNSTILE_SECRET_KEY: optionalSecret,
   GITHUB_REPOSITORY: z
     .string()
     .regex(/^[\w.-]+\/[\w.-]+$/)

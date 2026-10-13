@@ -9,10 +9,14 @@ import {
 } from '@papi/core';
 import type { ConfiguredEnv } from './env.ts';
 import {
+  DisabledCalendar,
   DisabledMailTransport,
+  GoogleCalendar,
   InstagramDiscovery,
   SupabaseRepo,
+  type CalendarProvider,
   type OutreachDeps,
+  type SalesDeps,
 } from '@papi/server';
 import { notify } from './notify.ts';
 import type { Repo } from '@papi/server';
@@ -30,6 +34,23 @@ export interface AppDeps {
   dispatchHeavy?: () => Promise<void>;
   /** Outreach (Phase 3); absent until PUBLIC_API_URL and PUBLIC_TOKEN_SECRET are set. */
   outreach?: OutreachDeps;
+  /** Sales (Phase 4): Satıcı, meetings, proposals. Calendar is disabled until Google is connected. */
+  sales?: SalesDeps;
+  /** Public base URL for demo links; absent until PUBLIC_API_URL is set. */
+  publicApiUrl?: string;
+  /** Injected in tests for outbound calls made by route handlers (Supabase Auth check). */
+  fetchImpl?: typeof fetch;
+}
+
+export function buildCalendar(env: ConfiguredEnv): CalendarProvider {
+  return env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
+    ? new GoogleCalendar({
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        refreshToken: env.GOOGLE_REFRESH_TOKEN,
+        ...(env.GOOGLE_CALENDAR_ID ? { calendarId: env.GOOGLE_CALENDAR_ID } : {}),
+      })
+    : new DisabledCalendar();
 }
 
 /** Composition root: one set of dependencies per request or cron tick. */
@@ -82,6 +103,8 @@ export async function buildDeps(env: ConfiguredEnv): Promise<AppDeps> {
     ownerId: env.TELEGRAM_OWNER_ID,
     instagram,
     ...(outreach ? { outreach } : {}),
+    sales: { repo, llm, calendar: buildCalendar(env) },
+    ...(env.PUBLIC_API_URL ? { publicApiUrl: env.PUBLIC_API_URL } : {}),
     pageSpeedKey: env.PAGESPEED_API_KEY,
     panelUrl: env.PANEL_URL,
     ...(token && repoName ? { dispatchHeavy: () => dispatchWorkflow(token, repoName) } : {}),

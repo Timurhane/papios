@@ -1477,4 +1477,17 @@ export class SupabaseRepo implements Repo {
       'rate limit',
     ) as boolean;
   }
+
+  async isMember(userId: string) {
+    const rows = must(
+      await this.db
+        .from('tenant_members')
+        .select('user_id')
+        .eq('tenant_id', this.tenantId)
+        .eq('user_id', userId)
+        .limit(1),
+      'membership',
+    ) as unknown[];
+    return rows.length > 0;
+  }
 }

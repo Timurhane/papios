@@ -16,6 +16,11 @@ export const COMMANDS = [
   'uyuyorum',
   'uyandim',
   'kota',
+  'hazirlik',
+  'gorusme',
+  'teklif',
+  'saat',
+  'demo',
   'start',
   'yardim',
 ] as const;
@@ -235,4 +240,26 @@ export function inQuietWindow(
   }).format(now);
   const { start, end } = window;
   return start <= end ? hhmm >= start && hhmm < end : hhmm >= start || hhmm < end;
+}
+
+const UUID_SRC = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/** Proposal VAT answer (K-7.2): pv:<proposalId>:i (included) | e (excluded). */
+export function encodeVatCallback(proposalId: string, mode: 'included' | 'excluded'): string {
+  return `pv:${proposalId}:${mode === 'included' ? 'i' : 'e'}`;
+}
+export function decodeVatCallback(
+  data: string,
+): { proposalId: string; mode: 'included' | 'excluded' } | null {
+  const m = new RegExp(`^pv:(${UUID_SRC}):([ie])$`).exec(data);
+  return m ? { proposalId: m[1] ?? '', mode: m[2] === 'i' ? 'included' : 'excluded' } : null;
+}
+
+/** Meeting slot chosen by the company: ms:<meetingId>:<index>. */
+export function encodeSlotCallback(meetingId: string, index: number): string {
+  return `ms:${meetingId}:${index}`;
+}
+export function decodeSlotCallback(data: string): { meetingId: string; index: number } | null {
+  const m = new RegExp(`^ms:(${UUID_SRC}):(\\d)$`).exec(data);
+  return m ? { meetingId: m[1] ?? '', index: Number(m[2]) } : null;
 }

@@ -18,6 +18,7 @@ export async function runCron(deps: AppDeps, now: Date): Promise<void> {
     instagram: deps.instagram ?? null,
     pageSpeedKey: deps.pageSpeedKey,
     panelUrl: deps.panelUrl,
+    ...(deps.sales ? { sales: deps.sales } : {}),
   };
   for (const job of scheduledJobs(now))
     await deps.repo.enqueue(job.type, job.payload, { unique: true });

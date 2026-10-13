@@ -2,10 +2,12 @@ import { formatApprovalGroup, JobRegistry, normalizeName, type LLMService } from
 import {
   addFromLink,
   analyzeCompanies,
+  draftReply,
   findWebsiteByName,
   formatOutcome,
   upsertCompany,
   type InstagramDiscovery,
+  type SalesDeps,
 } from '@papi/server';
 import { approvalRevise } from '@papi/prompts';
 import { notify } from '../notify.ts';
@@ -21,6 +23,8 @@ export interface JobDeps {
   pageSpeedKey?: string;
   panelUrl?: string;
   fetchFn?: typeof fetch;
+  /** Satıcı (Phase 4): reply drafts. */
+  sales?: SalesDeps;
 }
 
 const EMBED_BATCH = 16;
@@ -107,6 +111,13 @@ export function buildRegistry(deps: JobDeps): JobRegistry {
             await repo.enqueue('embed.missing', {}, { runAfter: new Date(Date.now() + 60_000) });
           return; // one table per run keeps the cron tick inside the subrequest budget
         }
+      })
+      // Satıcı: answer draft for an interested / question reply (redacted input, K-4.9).
+      .register('satici.reply_draft', async (job) => {
+        if (!deps.sales) return;
+        const approvalId = await draftReply(deps.sales, String(job.payload.inboxId ?? ''));
+        if (approvalId)
+          await notify(deps, 'approval_pending', '✍️ Gelen cevap için taslak hazır: /onaylar');
       })
       .register('approval.revise', async (job) => {
         const approvalId = String(job.payload.approvalId ?? '');

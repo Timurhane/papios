@@ -2,7 +2,9 @@ import {
   chunk,
   classifyUpdate,
   decodeApprovalCallback,
+  decodeSlotCallback,
   decodeTouchCallback,
+  decodeVatCallback,
   formatApprovalGroup,
   isOwner,
   QuotaExhaustedError,
@@ -18,11 +20,19 @@ import { isQuiet, type QuietMode } from './notify.ts';
 import { searchKnowledge } from './papi/knowledge.ts';
 import { papiTools } from './papi/tools.ts';
 import {
+  afterProposalDecision,
+  handleSalesCallback,
+  handleSalesCommand,
+  maybeMeetingNote,
+  SALES_HELP,
+} from './sales-bot.ts';
+import {
   completeOneClick,
   onApprovalDecided,
   type ApprovalRow,
   type OutreachDeps,
   type Repo,
+  type SalesDeps,
   type TelegramApi,
 } from '@papi/server';
 
@@ -33,6 +43,10 @@ export interface BotDeps {
   ownerId: number;
   /** Outreach (Phase 3); absent until the public URL and token secret are configured. */
   outreach?: OutreachDeps;
+  /** Sales (Phase 4). */
+  sales?: SalesDeps;
+  publicApiUrl?: string;
+  panelUrl?: string;
 }
 
 const HISTORY_MESSAGES = 10;
@@ -47,6 +61,7 @@ Komutlar:
 /ara {soru} – bilgi bankasında ara
 /rapor – kullanım ve sağlık raporu
 /kota – yapay zeka kota durumu
+${SALES_HELP}
 /uyuyorum – sessiz mod
 /uyandim – sessiz modu kapat ve özet al`;
 
@@ -127,6 +142,8 @@ async function handleText(text: string, chatId: number, deps: BotDeps, fromVoice
     return;
   }
 
+  if (await maybeMeetingNote(text, fromVoice, chatId, deps)) return;
+
   // Rule before model (K-2.3): a bare link is a lead, no LLM needed.
   const bare = bareUrl(text);
   if (bare && !fromVoice) {
@@ -184,10 +201,11 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
       return;
 
     case 'bugun': {
-      const [approvals, usage, quiet] = await Promise.all([
+      const [approvals, usage, quiet, ready] = await Promise.all([
         repo.listPendingApprovals(100),
         repo.usageSummary(),
         isQuiet(repo),
+        repo.touchesByStatus(['ready'], 100),
       ]);
       await tg.sendMessage(
         chatId,
@@ -198,8 +216,9 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
           `• Yapay zeka çağrısı (24 saat): ${usage.llmCallsToday} (${usage.cachedToday} önbellekten)`,
           `• Kuyruktaki iş: ${usage.queued}${usage.dead ? ` · başarısız: ${usage.dead}` : ''}`,
           usage.errors24h ? `• ⚠️ Hata (24 saat): ${usage.errors24h}` : null,
+          `• Tek tık / arama bekleyen: ${ready.length}`,
           '',
-          'Aramalar, ziyaretler ve sıcak cevaplar CRM ile (Faz 2–3) buraya eklenecek.',
+          'Ayrıntılar ve tek tık kuyruğu panelde, Bugün ekranında.',
         ]
           .filter((l) => l !== null)
           .join('\n'),
@@ -209,6 +228,14 @@ async function handleCommand(command: Command, args: string, chatId: number, dep
 
     case 'onaylar':
       await sendApprovals(chatId, deps);
+      return;
+
+    case 'hazirlik':
+    case 'gorusme':
+    case 'teklif':
+    case 'saat':
+    case 'demo':
+      await handleSalesCommand(command, args, chatId, deps);
       return;
 
     case 'ekle': {
@@ -332,6 +359,16 @@ async function handleCallback(callbackId: string, data: string, chatId: number, 
     await handleTouchCallback(callbackId, touchCb, chatId, deps);
     return;
   }
+  if (
+    await handleSalesCallback(
+      callbackId,
+      decodeVatCallback(data),
+      decodeSlotCallback(data),
+      chatId,
+      deps,
+    )
+  )
+    return;
   const cb = decodeApprovalCallback(data);
   if (!cb) {
     await deps.tg.answerCallback(callbackId, 'Geçersiz işlem');
@@ -393,8 +430,10 @@ async function afterDecision(
     instruction: null,
     verdict: status === 'approved' ? 'approved' : 'rejected',
   });
-  if (approval.kind === 'outreach' && deps.outreach)
+  if ((approval.kind === 'outreach' || approval.kind === 'reply') && deps.outreach)
     await onApprovalDecided(deps.outreach, approval.id, status);
+  if (approval.kind === 'proposal')
+    await afterProposalDecision(approval.id, status, deps.ownerId, deps);
 }
 
 /** Style memory keeps only the model-written part: greetings with names never reach a prompt (K-4.7). */
