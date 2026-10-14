@@ -1,0 +1,8 @@
+# Panel as a static-assets Worker (no Pages permission needed; V-87). Deployed by panel-deploy.yml.
+name = "papi-panel"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./dist"
+# Client-side routes (/crm, /teklifler/…) fall back to index.html.
+not_found_handling = "single-page-application"

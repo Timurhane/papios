@@ -1,0 +1,69 @@
+name: Panel deploy
+
+# Builds the panel and publishes it as a static-assets Worker (papi-panel.<subdomain>.workers.dev).
+# Runs when the panel or its shared code changes, or by hand. Skips until the Cloudflare secrets exist.
+on:
+  push:
+    branches: [main, claude/kind-pascal-sk09c4]
+    paths:
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - 'packages/modules/**'
+      - '.github/workflows/panel-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: panel-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Skip until configured
+        id: cfg
+        env:
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          MAIL: ${{ secrets.PANEL_EMAIL }}
+        run: |
+          missing=""
+          for n in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do [ -z "${!n}" ] && missing="$missing $n"; done
+          [ -z "$REF" ] && missing="$missing SUPABASE_PROJECT_REF"
+          [ -z "$KEY" ] && missing="$missing SUPABASE_PUBLISHABLE_KEY"
+          [ -z "$MAIL" ] && missing="$missing PANEL_EMAIL"
+          if [ -n "$missing" ]; then echo "missing secrets:$missing"; echo "ready=false" >> "$GITHUB_OUTPUT"
+          else echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.cfg.outputs.ready == 'true'
+        uses: actions/checkout@v5
+      - if: steps.cfg.outputs.ready == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.cfg.outputs.ready == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.cfg.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Build
+        env:
+          VITE_SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          VITE_ALLOWED_EMAIL: ${{ secrets.PANEL_EMAIL }}
+          VITE_API_URL: ${{ vars.PUBLIC_API_URL }}
+        run: |
+          pnpm --filter @papi/web build
+          # Pages-style catch-all is not needed: the Worker's SPA fallback serves index.html.
+          rm -f apps/web/dist/_redirects
+      - if: steps.cfg.outputs.ready == 'true'
+        name: Deploy
+        working-directory: apps/api
+        run: pnpm exec wrangler deploy --config ../web/wrangler.toml
