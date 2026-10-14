@@ -21,6 +21,8 @@ export function LoginPage() {
     try {
       const result = await client.signIn(email, password);
       if (result === 'ok') await refresh();
+      else if (result === 'not_allowed') setError(tr.login.notAllowed);
+      else if (result === 'config') setError(tr.login.config);
       else setError(tr.login.invalid);
     } catch {
       setError(tr.genericError);

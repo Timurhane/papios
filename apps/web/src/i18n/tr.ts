@@ -15,8 +15,9 @@ export const tr = {
     password: 'Şifre',
     submit: 'Devam et',
     submitting: 'Kontrol ediliyor…',
-    invalid: 'E-posta veya şifre hatalı.',
-    notAllowed: 'Bu hesabın panele erişim izni yok.',
+    invalid: 'Şifre hatalı (ya da bu e-postayla kullanıcı yok).',
+    notAllowed: 'Bu e-posta panelin izinli e-postası değil.',
+    config: 'Panelin Supabase anahtarı hatalı; giriş yapılamıyor.',
   },
   enroll: {
     title: 'İki aşamalı doğrulamayı kur',

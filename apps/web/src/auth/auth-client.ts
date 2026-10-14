@@ -10,7 +10,8 @@ export interface TotpEnrollment {
 /** The slice of Supabase Auth the panel uses. Kept narrow so it is easy to fake in tests. */
 export interface AuthClient {
   snapshot(): Promise<AuthSnapshot & { email: string | null }>;
-  signIn(email: string, password: string): Promise<'ok' | 'invalid'>;
+  /** 'not_allowed': not the panel's e-mail; 'invalid': wrong e-mail/password; 'config': the panel's Supabase key is wrong. */
+  signIn(email: string, password: string): Promise<'ok' | 'invalid' | 'not_allowed' | 'config'>;
   signOut(): Promise<void>;
   startTotpEnrollment(): Promise<TotpEnrollment>;
   verifyTotp(code: string, factorId?: string): Promise<'ok' | 'invalid'>;
@@ -51,9 +52,11 @@ export function createSupabaseAuthClient(
     },
 
     async signIn(email, password) {
-      if (!isAllowedEmail(email, allowedEmail)) return 'invalid';
+      if (!isAllowedEmail(email, allowedEmail)) return 'not_allowed';
       const { error } = await auth.signInWithPassword({ email, password });
-      return error ? 'invalid' : 'ok';
+      if (!error) return 'ok';
+      // A wrong project key answers 401 "Invalid API key"; wrong credentials answer 400.
+      return error.status === 401 || /api key/i.test(error.message) ? 'config' : 'invalid';
     },
 
     async signOut() {
