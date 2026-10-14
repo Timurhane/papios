@@ -12,7 +12,7 @@ export interface AuthClient {
   snapshot(): Promise<AuthSnapshot & { email: string | null }>;
   /** 'not_allowed': not the panel's e-mail; 'invalid': wrong e-mail/password; 'config': the panel's Supabase key is wrong. */
   signIn(email: string, password: string): Promise<'ok' | 'invalid' | 'not_allowed' | 'config'>;
-  /** Supabase's own code/message for the last failed sign-in, shown so setup problems can be told apart. */
+  /** Supabase's own code/message for the last failed sign-in or TOTP check, shown so setup problems can be told apart. */
   lastSignInError?(): string | null;
   signOut(): Promise<void>;
   startTotpEnrollment(): Promise<TotpEnrollment>;
@@ -96,6 +96,9 @@ export function createSupabaseAuthClient(
       }
       if (!id) return 'invalid';
       const { error } = await auth.mfa.challengeAndVerify({ factorId: id, code });
+      lastError = error
+        ? [error.status, error.code, error.message].filter(Boolean).join(' · ')
+        : null;
       return error ? 'invalid' : 'ok';
     },
 

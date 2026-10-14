@@ -21,7 +21,8 @@ export function TotpCodeForm({ factorId }: { factorId?: string }) {
       if (result === 'ok') {
         await refresh();
       } else {
-        setError(tr.verify.invalid);
+        const detail = client.lastSignInError?.();
+        setError(detail ? `${tr.verify.invalid} (${detail})` : tr.verify.invalid);
         setCode('');
       }
     } catch {
