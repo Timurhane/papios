@@ -113,6 +113,7 @@ describe('Phase 7 acceptance: end-to-end scenario', () => {
 
     const mail = new FakeMail();
     let clock = AT(0);
+    repo.now = () => clock;
     const outreach: OutreachDeps = {
       repo,
       llm,
@@ -265,6 +266,7 @@ describe('Phase 7 acceptance: analysis tool → Sıcak Gelen', () => {
       const id = repo.companies[0]?.id ?? 'ID';
       return { ...out, data: JSON.parse(JSON.stringify(out.data).replaceAll('"ID"', `"${id}"`)) };
     }) as typeof llm.generateStructured;
+    repo.now = () => AT(0);
     const outreach: OutreachDeps = {
       repo,
       llm,

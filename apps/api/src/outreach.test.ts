@@ -42,6 +42,8 @@ function withOutreach(script: string[] = []) {
     now: () => AT(0),
     rand: () => 0,
   };
+  // the repo stamps enrollments with its own clock: follow the test's clock, not the real date
+  ctx.repo.now = () => outreach.now?.() ?? AT(0);
   return { ...ctx, mail, outreach, deps: { ...ctx.deps, outreach } };
 }
 
