@@ -23,7 +23,10 @@ export function LoginPage() {
       if (result === 'ok') await refresh();
       else if (result === 'not_allowed') setError(tr.login.notAllowed);
       else if (result === 'config') setError(tr.login.config);
-      else setError(tr.login.invalid);
+      else {
+        const detail = client.lastSignInError?.();
+        setError(detail ? `${tr.login.invalid} (${detail})` : tr.login.invalid);
+      }
     } catch {
       setError(tr.genericError);
     } finally {

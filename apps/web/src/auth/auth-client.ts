@@ -12,6 +12,8 @@ export interface AuthClient {
   snapshot(): Promise<AuthSnapshot & { email: string | null }>;
   /** 'not_allowed': not the panel's e-mail; 'invalid': wrong e-mail/password; 'config': the panel's Supabase key is wrong. */
   signIn(email: string, password: string): Promise<'ok' | 'invalid' | 'not_allowed' | 'config'>;
+  /** Supabase's own code/message for the last failed sign-in, shown so setup problems can be told apart. */
+  lastSignInError?(): string | null;
   signOut(): Promise<void>;
   startTotpEnrollment(): Promise<TotpEnrollment>;
   verifyTotp(code: string, factorId?: string): Promise<'ok' | 'invalid'>;
@@ -23,6 +25,7 @@ export function createSupabaseAuthClient(
   allowedEmail: string,
 ): AuthClient {
   const auth = supabase.auth;
+  let lastError: string | null = null;
 
   return {
     async snapshot() {
@@ -54,9 +57,16 @@ export function createSupabaseAuthClient(
     async signIn(email, password) {
       if (!isAllowedEmail(email, allowedEmail)) return 'not_allowed';
       const { error } = await auth.signInWithPassword({ email, password });
+      lastError = error
+        ? [error.status, error.code, error.message].filter(Boolean).join(' · ')
+        : null;
       if (!error) return 'ok';
       // A wrong project key answers 401 "Invalid API key"; wrong credentials answer 400.
       return error.status === 401 || /api key/i.test(error.message) ? 'config' : 'invalid';
+    },
+
+    lastSignInError() {
+      return lastError;
     },
 
     async signOut() {
